@@ -1,53 +1,74 @@
 import requests
 from bs4 import BeautifulSoup
 import re
+from urllib.parse import urljoin
 from constants import *
 from json_edit import add_entry_to_json
+import logging
 
+#logger config
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
-## Args: url (str): The URL to scan
-##       vuln_list (tuple list): Gets all the supposed scanned ASVS security breach
-## Returns: list: A list of dictionaries, each containing form action, method, and input fields
+# HTTP Headers to pretend to be a navigator
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+}
+
+PASSWORD_ERROR_PATTERNS = [
+    r"password.*too short",
+    r"must be at least.*12 characters",
+    r"invalid password"
+]
+
 def detect_forms(url):
     forms = []
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
         for form in soup.find_all("form"):
-            form_details = {"action": form.get("action"), "method": form.get("method", "get").lower(), "inputs": []}
+            form_details = {"action": form.get("action"), "method": form.get("method", "post").lower(), "inputs": []}
             for input_tag in form.find_all("input"):
                 input_name = input_tag.get("name")
                 input_type = input_tag.get("type", "text")
                 form_details["inputs"].append({"name": input_name, "type": input_type})
             forms.append(form_details)
     except Exception as e:
-        print(f"Error while detecting forms: {e}")
+        logger.error(f"Error while detecting forms: {e}")
     return forms
 
+def submit_form(form_url, form_method, data):
+    try:
+        if form_method == "post":
+            response = requests.post(form_url, data=data, headers=HEADERS, timeout=10)
+        else:
+            response = requests.get(form_url, params=data, headers=HEADERS, timeout=10)
+        return response
+    except Exception as e:
+        logger.error(f"Error while submitting form: {e}")
+        return None
 
-## Args: url (str): The URL of the registration/login page
-##       vuln_list (tuple list): Gets all the supposed scanned ASVS security breach
-## Returns: bool: True if the site enforces 12+ character password policy, False otherwise
 def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
     forms = detect_forms(url)
-
+    print(f"OMAGAD A FORM: {forms}")
     for form in forms:
-        print(f"ACTION = {form['action']}")
         action = form["action"] if form["action"] else url
+        form_url = urljoin(url, action)
         form_method = form["method"]
         inputs = form["inputs"]
 
-        username_field = None
         password_field = None
         confirm_password_field = None
-        email_field = None
         other_fields = {}
         checkboxes = {}
+
         for input_tag in inputs:
             input_name = input_tag.get("name")
             input_type = input_tag.get("type", "text")
-
             if not input_name:
                 continue
             if input_type == "password":
@@ -55,10 +76,6 @@ def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
                     password_field = input_name
                 else:
                     confirm_password_field = input_name
-            elif "user" in input_name.lower():
-                username_field = input_name
-            elif input_type == "email" or "mail" in input_name.lower():
-                email_field = input_name
             elif input_type == "checkbox":
                 checkboxes[input_name] = "on"
             else:
@@ -66,25 +83,20 @@ def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
 
         if not password_field:
             continue
-        form_url = url if action.startswith("/") else action
-        data_wrong_password = {password_field: "Elev3nwr@ng"}
+
+        data_wrong_password = {password_field: "short"}
         if confirm_password_field:
-            data_wrong_password[confirm_password_field] = "Elev3nwr@ng"
-        if username_field:
-            data_wrong_password[username_field] = "ASVS_HERMES_TEST_user"
-        if email_field:
-            data_wrong_password[email_field] = "ASVSHermesTest@gmail.com"
+            data_wrong_password[confirm_password_field] = "short"
         data_wrong_password.update(other_fields)
         data_wrong_password.update(checkboxes)
-        try:
-            if form_method == "post":
-                response_wrong = requests.post(form_url, data=data_wrong_password, timeout=10)
-            else:
-                response_wrong = requests.get(form_url, params=data_wrong_password, timeout=10)
-            if response_wrong.status_code == 200 and "error" not in response_wrong.text.lower():
-                add_entry_to_json("V2.1.1", "Password Security", "User password isn't required to be at least 12 characters in length")
+
+        response_wrong = submit_form(form_url, form_method, data_wrong_password)
+        if response_wrong and response_wrong.status_code == 200:
+            if not any(re.search(pattern, response_wrong.text.lower()) for pattern in PASSWORD_ERROR_PATTERNS):
+                add_entry_to_json(
+                    "V2.1.1",
+                    "Password Security",
+                    "User password isn't required to be at least 12 characters in length"
+                )
                 vuln_list.append(["Password Security", "Password accepted with fewer than 12 characters"])
-            return vuln_list
-        except Exception as e:
-            print(f"Error while scanning form: {e}")
     return vuln_list

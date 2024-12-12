@@ -113,5 +113,5 @@ def check_for_captcha(response, HTML_soup):
 
 
 ## add scanning fuctions in the list to execute them
-function_check_list = []
+function_check_list = [check_SQL]
 one_time_function_list = [check_url_sql, check_asvs_l1_password_security_V2_1_1]
