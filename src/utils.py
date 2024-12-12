@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
-from password_security import check_asvs_l1_password_security_V2_1_1
+from password_security import *
 from constants import *
 from json_edit import *
 import logging
@@ -114,4 +114,4 @@ def check_for_captcha(response, HTML_soup):
 
 ## add scanning fuctions in the list to execute them
 function_check_list = [check_SQL]
-one_time_function_list = [check_url_sql, check_asvs_l1_password_security_V2_1_1]
+one_time_function_list = [check_url_sql, check_asvs_l1_password_security_V2_1_1, check_asvs_l1_password_security_V2_1_2]
