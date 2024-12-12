@@ -33,7 +33,7 @@ def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
     forms = detect_forms(url)
 
     for form in forms:
-        print(f"ACTION = {form["action"]}")
+        print(f"ACTION = {form['action']}")
         action = form["action"] if form["action"] else url
         form_method = form["method"]
         inputs = form["inputs"]
