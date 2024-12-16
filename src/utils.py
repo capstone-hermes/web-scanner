@@ -51,15 +51,14 @@ def process_url(url):
 
     set_json(url)
     vuln_list = []
+    HTML_soup = BeautifulSoup(response.text, 'html.parser')
+    forms = HTML_soup.find_all('form')
+    constants.HAS_CAPTCHA = check_for_captcha(response, HTML_soup)
 
     for function_check in one_time_function_list:
         vuln_list = function_check(vuln_list, url)
 
     # Forms analyze
-    HTML_soup = BeautifulSoup(response.text, 'html.parser')
-    forms = HTML_soup.find_all('form')
-    global HAS_CAPTCHA
-    HAS_CAPTCHA = check_for_captcha(response, HTML_soup)
     vuln_list = process_forms(vuln_list, forms, url)
 
     logger.info(f"Vulnerabilities detected: {vuln_list}")
@@ -113,5 +112,5 @@ def check_for_captcha(response, HTML_soup):
 
 
 ## add scanning fuctions in the list to execute them
-function_check_list = [check_SQL]
+function_check_list = []
 one_time_function_list = [check_url_sql, check_asvs_l1_password_security_V2_1_1, check_asvs_l1_password_security_V2_1_2]

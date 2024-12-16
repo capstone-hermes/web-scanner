@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 from urllib.parse import urljoin
-from constants import *
+import constants
 from json_edit import add_entry_to_json
 import logging
 
@@ -98,6 +98,8 @@ def validate_password_policy(response, error_patterns):
 
 
 def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
+    if constants.HAS_CAPTCHA:
+        return vuln_list
     forms = detect_forms(url)
     for form in forms:
         action = form["action"] if form["action"] else url
@@ -126,6 +128,8 @@ def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
 
 
 def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
+    if constants.HAS_CAPTCHA:
+        return vuln_list
     forms = detect_forms(url)
     for form in forms:
         action = form["action"] if form["action"] else url
