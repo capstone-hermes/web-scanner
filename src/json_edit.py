@@ -32,15 +32,19 @@ def add_entry_to_json(name, found_in, info):
         with open(JSONNAME, 'r') as file:
             data = json.load(file)
 
-    new_entry = {
+    if not any(isinstance(entry, dict) and "Findings" in entry for entry in data):
+        data.append({"Findings": []})
+
+    findings_entry = next(entry for entry in data if "Findings" in entry)
+    findings_entry["Findings"].append({
         "Name": name,
         "Found_in": found_in,
         "Info": info
-    }
-    data.append(new_entry)
+    })
 
     with open(JSONNAME, 'w') as file:
         json.dump(data, file, indent=4)
+
 
 def clear_json():
     if Path(JSONNAME).is_file():

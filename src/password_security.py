@@ -56,6 +56,8 @@ def extract_form_details(form):
     """Extract relevant details from a form."""
 
     form_details = {
+        "username_field": None,
+        "email_field": None,
         "password_field": None,
         "confirm_password_field": None,
         "other_fields": {},
@@ -71,6 +73,10 @@ def extract_form_details(form):
                 form_details["password_field"] = input_name
             else:
                 form_details["confirm_password_field"] = input_name
+        elif "user" in input_name.lower():
+            form_details["username_field"] = input_name
+        elif input_type == "email" or "mail" in input_name.lower():
+            form_details["email_field"] = input_name
         elif input_type == "checkbox":
             form_details["checkboxes"][input_name] = "on"
         else:
@@ -82,9 +88,13 @@ def prepare_form_data(form_details, test_values):
 
     data = {}
     if form_details["password_field"]:
-        data[form_details["password_field"]] = test_values.get("password", "default_password")
+        data[form_details["password_field"]] = test_values.get("password")
     if form_details["confirm_password_field"]:
-        data[form_details["confirm_password_field"]] = test_values.get("confirm_password", "default_password")
+        data[form_details["confirm_password_field"]] = test_values.get("confirm_password")
+    if form_details["username_field"]:
+            data[form_details["username_field"]] = test_values.get("username")
+    if form_details["email_field"]:
+            data[form_details["email_field"]] = test_values.get("email")
     data.update(form_details["other_fields"])
     data.update(form_details["checkboxes"])
     return data
@@ -111,7 +121,7 @@ def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
             continue
 
         # Prepare datas for a short pwd
-        test_values = {"password": "short", "confirm_password": "short"}
+        test_values = {"username": "ASVS_HERMES_TEST_user", "email": "ASVSHermesTest@gmail.com", "password": "Elev3nwr@ng", "confirm_password": "Elev3nwr@ng"}
         data_wrong_password = prepare_form_data(form_details, test_values)
 
         response_wrong = submit_form(form_url, form_method, data_wrong_password)
@@ -142,7 +152,7 @@ def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
         
         # Prepare a password with more than 128 char
         long_password = "a" * 129
-        test_values = {"password": long_password, "confirm_password": long_password}
+        test_values = {"username": "ASVS_HERMES_TEST_user", "email": "ASVSHermesTest@gmail.com", "password": long_password, "confirm_password": long_password}
         data_long_password = prepare_form_data(form_details, test_values)
 
         response_long = submit_form(form_url, form_method, data_long_password)
