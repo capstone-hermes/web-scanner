@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from password_security import *
 from constants import *
 from json_edit import *
@@ -38,6 +38,30 @@ def process_forms(vuln_list, forms, url):
                 vuln_list = function_check(vuln_list, url, input_name, input_type)
     return vuln_list
 
+## Args: url (str): Link to be scanned
+##       visited (list): List of already visited URLs
+## Returns: List: Returns a list of all the links accessible by following href belonging to the same domain as the base URL
+def get_internal_links(url, visited=None):
+    if visited is None:
+        visited = []
+
+    domain = urlparse(url).netloc
+    if url in visited:
+        return visited
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+    except requests.RequestException:
+        return visited
+
+    visited.append(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    for link in soup.find_all("a", href=True):
+        new_url = urljoin(url, link["href"])
+        parsed_url = urlparse(new_url)
+        if parsed_url.netloc == domain and new_url not in visited:
+            get_internal_links(new_url, visited)
+    return visited
 
 def process_url(url):
     clear_json()
@@ -45,21 +69,27 @@ def process_url(url):
         url = "https://" + url
 
     logger.info(f"Processing URL: {url}")
-    response = fetch_page(url)
-    if not response:
+    links = get_internal_links(url)
+    if links == False:
         return 1
 
-    set_json(url)
     vuln_list = []
-    HTML_soup = BeautifulSoup(response.text, 'html.parser')
-    forms = HTML_soup.find_all('form')
-    constants.HAS_CAPTCHA = check_for_captcha(response, HTML_soup)
+    set_json(links[0])
+    for link in links:
+        response = fetch_page(link)
+        if not response:
+            return 1
+        add_link_to_json(link)
 
-    for function_check in one_time_function_list:
-        vuln_list = function_check(vuln_list, url)
+        HTML_soup = BeautifulSoup(response.text, 'html.parser')
+        forms = HTML_soup.find_all('form')
+        constants.HAS_CAPTCHA = check_for_captcha(response, HTML_soup)
 
-    # Forms analyze
-    vuln_list = process_forms(vuln_list, forms, url)
+        for function_check in one_time_function_list:
+            vuln_list = function_check(vuln_list, link)
+
+        # Forms analyze
+        vuln_list = process_forms(vuln_list, forms, link)
 
     logger.info(f"Vulnerabilities detected: {vuln_list}")
     return 0
@@ -113,4 +143,4 @@ def check_for_captcha(response, HTML_soup):
 
 ## add scanning fuctions in the list to execute them
 function_check_list = []
-one_time_function_list = [check_url_sql, check_asvs_l1_password_security_V2_1_1, check_asvs_l1_password_security_V2_1_2]
+one_time_function_list = [check_asvs_l1_password_security_V2_1_1, check_asvs_l1_password_security_V2_1_2]

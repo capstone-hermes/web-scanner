@@ -1,30 +1,48 @@
 [
     {
-        "name": "SQL injection",
-        "found_in": "form type : search"
+        "URL_scanned": "https://google-gruyere.appspot.com/347359439843304009221507552839652897033/newaccount.gtl"
     },
     {
-        "name": "SQL injection",
-        "found_in": "form type : text"
+        "All_URL_Scanned": [
+            {
+                "URL": "https://google-gruyere.appspot.com/347359439843304009221507552839652897033/newaccount.gtl"
+            },
+            {
+                "URL": "https://google-gruyere.appspot.com/347359439843304009221507552839652897033/"
+            },
+            {
+                "URL": "https://google-gruyere.appspot.com/347359439843304009221507552839652897033/login"
+            },
+            {
+                "URL": "https://google-gruyere.appspot.com/347359439843304009221507552839652897033/snippets.gtl?uid=cheddar"
+            },
+            {
+                "URL": "https://google-gruyere.appspot.com/347359439843304009221507552839652897033/snippets.gtl?uid=brie"
+            }
+        ]
     },
     {
-        "name": "SQL injection",
-        "found_in": "form type : password"
-    },
-    {
-        "name": "SQL injection",
-        "found_in": "form type : text"
-    },
-    {
-        "name": "SQL injection",
-        "found_in": "form type : text"
-    },
-    {
-        "name": "SQL injection",
-        "found_in": "form type : text"
-    },
-    {
-        "name": "SQL injection",
-        "found_in": "form type : text"
+        "Findings": [
+            {
+                "Name": "V2.1.1",
+                "Found_in": "Password Security",
+                "Info": "User password isn't required to be at least 12 characters in length"
+            },
+            {
+                "Name": "V2.1.2",
+                "Found_in": "Password Security",
+                "Info": "User password is allowed with more than 128 characters"
+            },
+            {
+                "Name": "V2.1.1",
+                "Found_in": "Password Security",
+                "Info": "User password isn't required to be at least 12 characters in length"
+            },
+            {
+                "Name": "V2.1.2",
+                "Found_in": "Password Security",
+                "Info": "User password is allowed with more than 128 characters"
+            }
+        ]
     }
 ]
