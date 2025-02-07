@@ -13,11 +13,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# HTTP Headers to pretend to be a navigator
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-}
-
 PASSWORD_ERROR_PATTERNS = [
     r"password.*too short",
     r"must be at least.*12 characters",
@@ -27,7 +22,7 @@ PASSWORD_ERROR_PATTERNS = [
 def detect_forms(url):
     forms = []
     try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(url, headers=constants.HEADERS, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
         for form in soup.find_all("form"):
@@ -44,9 +39,9 @@ def detect_forms(url):
 def submit_form(form_url, form_method, data):
     try:
         if form_method == "post":
-            response = requests.post(form_url, data=data, headers=HEADERS, timeout=10)
+            response = requests.post(form_url, data=data, headers=constants.HEADERS, timeout=10)
         else:
-            response = requests.get(form_url, params=data, headers=HEADERS, timeout=10)
+            response = requests.get(form_url, params=data, headers=constants.HEADERS, timeout=10)
         return response
     except Exception as e:
         logger.error(f"Error while submitting form: {e}")
@@ -117,12 +112,15 @@ def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
         form_method = form["method"]
 
         form_details = extract_form_details(form)
+
         if not form_details["password_field"]:
             continue
 
         # Prepare datas for a short pwd
         test_values = {"username": "ASVS_HERMES_TEST_user", "email": "ASVSHermesTest@gmail.com", "password": "Elev3nwr@ng", "confirm_password": "Elev3nwr@ng"}
         data_wrong_password = prepare_form_data(form_details, test_values)
+
+        
 
         response_wrong = submit_form(form_url, form_method, data_wrong_password)
 
@@ -138,6 +136,7 @@ def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
 
 
 def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
+
     if constants.HAS_CAPTCHA:
         return vuln_list
     forms = detect_forms(url)
