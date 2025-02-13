@@ -146,19 +146,6 @@ def check_parameters(url):
     parsed_url = urlparse(url)
     return bool(parsed_url.query)
 
-def check_url_sql(vuln_list, url):
-    if check_parameters(url):
-        add_entry_to_json("SQL injection", "URL", "L'URL contient des paramètres")
-        vuln_list.append(["SQL injection", "L'URL contient des paramètres"])
-    return vuln_list
-
-def check_SQL(vuln_list, url, name, type):
-    check_list_type_sql = ["email", "password", "search", "text"]
-    if type in check_list_type_sql:
-        add_entry_to_json("SQL injection", "form type : " + type, "")
-        vuln_list.append(["SQL injection", "form type : " + type])
-    return vuln_list
-
 def check_for_captcha(response, HTML_soup):
     captcha_keywords = ["captcha", "g-recaptcha", "h-captcha", "grecaptcha", "verify you're human"]
 
