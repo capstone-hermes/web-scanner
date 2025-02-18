@@ -21,9 +21,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def fetch_page(url):
+def fetch_page(session, url):
     try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = session.get(url, headers=HEADERS, timeout=20)
         if response.status_code != 200:
             logger.error(f"Échec de la récupération de la page. Code : {response.status_code}")
             return None
@@ -33,7 +33,7 @@ def fetch_page(url):
         logger.error(f"Erreur lors de la récupération de la page {url} : {e}")
         return None
 
-def process_forms(vuln_list, forms, url):
+def process_forms(vuln_list, forms, url, session):
     for form in forms:
         inputs = form.find_all('input')
         for input_field in inputs:
@@ -45,8 +45,8 @@ def process_forms(vuln_list, forms, url):
 
 async def fetch_async(session, url):
     try:
-        # On fixe un délai maximum pour la requête (5 secondes)
-        async with async_timeout.timeout(5):
+        # On fixe un délai maximum pour la requête (20 secondes)
+        async with async_timeout.timeout(20):
             # On envoie la requête de façon asynchrone
             async with session.get(url, headers=HEADERS) as response:
                 # Si la réponse est bonne, on retourne le contenu (texte) de la page
@@ -118,8 +118,10 @@ def process_url(url):
 
     # Enregistrement de la première URL scannée dans le JSON
     set_json(links[0])
+    session = requests.Session()
+    session.get(url)
     for link in links:
-        response = fetch_page(link)
+        response = fetch_page(session, link)
         if not response:
             continue  # On passe au lien suivant si la page n'a pas pu être récupérée
 
@@ -129,11 +131,11 @@ def process_url(url):
         forms = HTML_soup.find_all('form')
         constants.HAS_CAPTCHA = check_for_captcha(response, HTML_soup)
 
-        for function_check in one_time_function_list:
-            vuln_list = function_check(vuln_list, link)
+        for function_check in function_list:
+            vuln_list = function_check(vuln_list, link, session)
 
         # Analyse des formulaires
-        vuln_list = process_forms(vuln_list, forms, link)
+        vuln_list = process_forms(vuln_list, forms, link, session)
 
     logger.info(f"Vulnérabilités détectées : {vuln_list}")
     return 0
@@ -166,10 +168,10 @@ def check_for_captcha(response, HTML_soup):
     return False
 
 # Listes des fonctions de scan à exécuter
-function_check_list = [
-    # Vous pouvez ajouter ici d'autres fonctions de vérification (par ex. check_SQL)
-]
-one_time_function_list = [
+
+function_check_list = []
+
+function_list = [
     check_asvs_l1_password_security_V2_1_1, 
     check_asvs_l1_password_security_V2_1_2,
 ]
