@@ -1,5 +1,6 @@
 import sys
 from utils import process_url
+import asyncio
 
 if __name__ == "__main__":
     ac = len(sys.argv)
@@ -8,4 +9,4 @@ if __name__ == "__main__":
         print("Usage: python main.py <url>")
         sys.exit(1)
     url = av[1]
-    process_url(url)
+    asyncio.run(process_url(url))
