@@ -60,61 +60,77 @@ async def detect_forms(url, browser):
         logger.error(f"Error while detecting forms: {e}")
         return forms, None, None
 
-async def submit_form(form_url, form_method, data, inputs, content_type):
+def validate_password_policy(response, error_patterns):
     """
-    Remplit le formulaire en utilisant pyppeteer pour chacuns des champs présents dans la liste `inputs` et le soumet
+    Vérifie si la réponse indique que la politique de mot de passe a échoué.
+    """
+    if response:
+        return any(re.search(pattern, response) for pattern in error_patterns)
+    return False
+
+async def attempt_signup(url, test_data):
+    """
+    Simule la soumission d'un formulaire d'inscription via pyppeteer.
     
-    Return : réponse du site par rapport à la requête envoyée
+    Processus :
+      - Ouvre la page à l'URL donnée.
+      - Recherche le premier formulaire contenant un champ password (sinon utilise le premier formulaire trouvé).
+      - Récupère dynamiquement les champs du formulaire et les remplit en fonction du dictionnaire test_data.
+        Les clés attendues dans test_data sont :
+          - "username"
+          - "password"
+          - "confirm_password" (optionnel, sinon on réutilise "password")
+          - "email" (optionnel)
+      - Soumet le formulaire (en cliquant sur le bouton submit ou en exécutant form.submit()).
+      - Attend quelques secondes pour laisser le temps au rechargement et retourne le contenu HTML de la page résultante.
     """
     try:
+        username_keywords = ["user", "username", "login", "uid", "account"]
+        email_keywords = ["mail", "email", "e-mail", "address"]
+        # replace to have visual demo
+        # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
         browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH)
         page = await browser.newPage()
-        await page.goto(form_url, {'timeout': 10000})
+        logger.info(f"Accès à {url}...")
+        await page.goto(url, {'timeout': 10000})
         
+        # Recherche des formulaires sur la page
         forms = await page.querySelectorAll("form")
         login_form = None
         for form in forms:
             if await form.querySelector("input[type='password']"):
                 login_form = form
                 break
-
         if not login_form:
-            logger.error("Aucun formulaire de connexion trouvé")
+            logger.error("Aucun formulaire trouvé sur la page.")
             await browser.close()
             return None
-
-        # Récupération des champs du formulaire
+        
+        # Récupération et remplissage dynamique des champs du formulaire
         inputs = await login_form.querySelectorAll("input")
-        form_data = {}
+        # On utilise une variable dans test_data pour suivre le remplissage du premier champ password
+        test_data["password_filled"] = False
         for input_field in inputs:
-            name_property = await input_field.getProperty("name")
-            name = await name_property.jsonValue() if name_property else None
-
-            type_property = await input_field.getProperty("type")
-            input_type = await type_property.jsonValue() if type_property else "text"
-
-            if name:
-                form_data[name] = input_type
-
-        # Remplissage des champs
-        first_password_filled = False
-        for name, input_type in form_data.items():
-            if input_type == "password":
-                if not first_password_filled:
-                    await page.type(f'input[name="{name}"]', data.get("password", ""))
-                    first_password_filled = True
+            name_prop = await input_field.getProperty("name")
+            name = await name_prop.jsonValue() if name_prop else None
+            type_prop = await input_field.getProperty("type")
+            input_type = (await type_prop.jsonValue()) if type_prop else "text"
+            if not name:
+                continue
+            if input_type.lower() == "password":
+                if not test_data["password_filled"]:
+                    await page.type(f'input[name="{name}"]', test_data.get("password"))
+                    test_data["password_filled"] = True
                 else:
-                    # Remplir le champ de confirmation, ou réutiliser le password s'il n'est pas défini
-                    await page.type(f'input[name="{name}"]', data.get("confirm_password", data.get("password", "")))
-            elif input_type in ["text", "email"]:
+                    await page.type(f'input[name="{name}"]', test_data.get("confirm_password", test_data.get("password")))
+            elif input_type.lower() in ["text", "email"]:
                 lower_name = name.lower()
-                if "user" in lower_name or "uid" in lower_name:
-                    await page.type(f'input[name="{name}"]', data.get("username", ""))
-                elif "mail" in lower_name or "email" in lower_name:
-                    await page.type(f'input[name="{name}"]', data.get("email", ""))
-                else:
-                    if name in data:
-                        await page.type(f'input[name="{name}"]', data[name])
+                if any(keyword in lower_name for keyword in username_keywords):
+                    await page.type(f'input[name="{name}"]', test_data.get("username"))
+                elif any(keyword in lower_name for keyword in email_keywords):
+                    await page.type(f'input[name="{name}"]', test_data.get("email"))
+                elif name in test_data:
+                    await page.type(f'input[name="{name}"]', test_data[name])
         
         # Soumission du formulaire
         submit_button = await login_form.querySelector("button[type='submit'], input[type='submit']")
@@ -122,118 +138,35 @@ async def submit_form(form_url, form_method, data, inputs, content_type):
             await submit_button.click()
         else:
             await page.evaluate('(form) => form.submit()', login_form)
-
-        try:
-            await page.waitForNavigation({'timeout': 10000})
-        except Exception:
-            pass
-
-        html = await page.content()
-        class FakeResponse:
-            pass
-        fake_response = FakeResponse()
-        fake_response.status_code = 200
-        fake_response.text = html
+        
+        # Attendre quelques secondes pour le rechargement
+        await asyncio.sleep(5)
+        content = await page.content()
         await browser.close()
-        return fake_response
+        return content
     except Exception as e:
-        logger.error(f"Error while submitting form: {e}, URL: {form_url}, Data: {data}")
+        logger.error(f"Erreur lors de l'inscription: {e}")
         return None
 
-def extract_form_details(form):
+async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
     """
-    Extrait les détails pertinents d'un formulaire
-    """
-    form_details = {
-        "username_field": None,
-        "email_field": None,
-        "password_field": None,
-        "confirm_password_field": None,
-        "other_fields": {},
-        "checkboxes": {}
-    }
-    
-    # Listes de mots-clés pour identifier les champs
-    username_keywords = ["user", "username", "login", "uid", "account"]
-    email_keywords = ["mail", "email", "e-mail", "address"]
-
-    for input_tag in form["inputs"]:
-        input_name = input_tag.get("name")
-        input_type = input_tag.get("type", "text").lower()
-        if not input_name:
-            continue
-        lower_input_name = input_name.lower()
-        if input_type == "password":
-            if form_details["password_field"] is None:
-                form_details["password_field"] = input_name
-            else:
-                form_details["confirm_password_field"] = input_name
-        elif any(keyword in lower_input_name for keyword in username_keywords):
-            form_details["username_field"] = input_name
-        elif input_type == "email" or any(keyword in lower_input_name for keyword in email_keywords):
-            form_details["email_field"] = input_name
-        elif input_type == "checkbox":
-            form_details["checkboxes"][input_name] = "on"
-        else:
-            form_details["other_fields"][input_name] = "ASVSHermesTestvalue"
-    return form_details
-
-def prepare_form_data(form_details, test_values, token_name=None, token_value=None):
-    """
-    Prépare les données du formulaire à envoyer lors de la soumission.
-    """
-    data = {}
-    if form_details.get("password_field"):
-        data[form_details["password_field"]] = test_values.get("password")
-    if form_details.get("confirm_password_field"):
-        data[form_details["confirm_password_field"]] = test_values.get("confirm_password")
-    if form_details.get("username_field"):
-        data[form_details["username_field"]] = test_values.get("username")
-    if form_details.get("email_field"):
-        data[form_details["email_field"]] = test_values.get("email")
-    data.update(form_details.get("other_fields", {}))
-    data.update(form_details.get("checkboxes", {}))
-    if token_name:
-        data[token_name] = token_value
-    return data
-
-def validate_password_policy(response, error_patterns):
-    """
-    Vérifie si la réponse indique que la politique de mot de passe a échoué.
-    """
-    if response and response.status_code == 200:
-        return any(re.search(pattern, response.text.lower()) for pattern in error_patterns)
-    return False
-
-async def check_asvs_l1_password_security_V2_1_1(vuln_list, url, browser):
-    """
-    Vérifie si la politique de mot de passe force un minimum de 12 caractères.
+    Vérifie si la politique de mot de passe force un minimum de 12 caractères
     """
     if constants.HAS_CAPTCHA:
         return vuln_list
-    forms, soup, content_type = await detect_forms(url, browser)
-    token_name, token_value = detect_token(soup)
-    for form in forms:
-        action = form["action"] if form["action"] else url
-        form_url = urljoin(url, action)
-        form_method = form["method"]
-        form_details = extract_form_details(form)
+    
+    test_data = {
+        "username": "HERMEStest1",
+        "email": "ASVSHermesTest1@gmail.com",
+        "password": "Elev3nwr@ng",
+        "confirm_password": "Elev3nwr@ng"
+    }
 
-        if not form_details["password_field"]:
-            continue
-
-        # Préparation d'un mot de passe trop court
-        test_values = {
-            "username": "ASVS_HERMES_TEST_user1",
-            "email": "ASVSHermesTest1@gmail.com",
-            "password": "Elev3nwr@ng",
-            "confirm_password": "Elev3nwr@ng"
-        }
-        data_wrong_password = prepare_form_data(form_details, test_values, token_name, token_value)
-        # Passer aussi la liste des inputs du formulaire pour remplir les champs
-        sign_in_keywords = ["sign out", "logout"]
-        response_wrong = await submit_form(form_url, form_method, data_wrong_password, form["inputs"], content_type)
-        if response_wrong and not validate_password_policy(response_wrong, PASSWORD_ERROR_PATTERNS) and any(keyword in response_wrong.text.lower() for keyword in sign_in_keywords):
+    content = await attempt_signup(url, test_data)
+    if content:
+        lower_content = content.lower()
+        sign_in_keywords = ["sign out", "logout", "log out"]
+        if lower_content and any(keyword in lower_content for keyword in sign_in_keywords) and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
             add_entry_to_json(
                 "V2.1.1",
                 "Password Security",
@@ -242,37 +175,29 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url, browser):
             vuln_list.append(["Password Security", "Password accepted with fewer than 12 characters"])
     return vuln_list
 
-async def check_asvs_l1_password_security_V2_1_2(vuln_list, url, browser):
+async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
     """
-    Vérifie si un mot de passe de plus de 128 caractères est accepté.
+    Vérifie si un mot de passe de plus de 128 caractères est accepté
     """
     if constants.HAS_CAPTCHA:
         return vuln_list
-    forms, soup, content_type = await detect_forms(url, browser)
-    token_name, token_value = detect_token(soup)
-    for form in forms:
-        action = form["action"] if form["action"] else url
-        form_url = urljoin(url, action)
-        form_method = form["method"]
-        form_details = extract_form_details(form)
 
-        if not form_details["password_field"]:
-            continue
+    long_password = "a" * 129
+    test_data = {
+        "username": "HERMEStest2",
+        "email": "ASVSHermesTest2@gmail.com",
+        "password": long_password,
+        "confirm_password": long_password
+    }
 
-        # Préparation d'un mot de passe de 129 caractères
-        long_password = "a" * 129
-        test_values = {
-            "username": "ASVS_HERMES_TEST_user2",
-            "email": "ASVSHermesTest2@gmail.com",
-            "password": long_password,
-            "confirm_password": long_password
-        }
-        data_long_password = prepare_form_data(form_details, test_values, token_name, token_value)
-        sign_in_keywords = ["sign out", "logout"]
-        response_long = await submit_form(form_url, form_method, data_long_password, form["inputs"], content_type)
-        if response_long and not validate_password_policy(response_long, PASSWORD_ERROR_PATTERNS) and any(keyword in response_long.text.lower() for keyword in sign_in_keywords):
+        
+    content = await attempt_signup(url, test_data)
+    if content:
+        lower_content = content.lower()
+        sign_in_keywords = ["sign out", "logout", "log out"]
+        if lower_content and (not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS) or any(keyword in lower_content for keyword in sign_in_keywords)):
             add_entry_to_json(
-                "V2.1.2",
+                "V2.1.1",
                 "Password Security",
                 "User password is allowed with more than 128 characters"
             )

@@ -142,7 +142,7 @@ async def process_url(url):
         constants.HAS_CAPTCHA = check_for_captcha(soup)
         
         for function_check in function_list:
-            vuln_list = await function_check(vuln_list, link, browser)
+            vuln_list = await function_check(vuln_list, link)
         
         vuln_list = await process_forms(vuln_list, soup.find_all('form'), link, browser)
     await browser.close()
