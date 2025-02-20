@@ -197,7 +197,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
         sign_in_keywords = ["sign out", "logout", "log out"]
         if lower_content and (not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS) or any(keyword in lower_content for keyword in sign_in_keywords)):
             add_entry_to_json(
-                "V2.1.1",
+                "V2.1.2",
                 "Password Security",
                 "User password is allowed with more than 128 characters"
             )
