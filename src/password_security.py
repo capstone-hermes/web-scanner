@@ -16,8 +16,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 PASSWORD_ERROR_PATTERNS = [
-    r"password.*too short",
-    r"must be at least.*12 characters",
+    r"too short",
+    r"must be at least",
     r"invalid",
     r"error"
 ]
@@ -88,12 +88,12 @@ async def attempt_signup(url, test_data):
         username_keywords = ["user", "username", "login", "uid", "account"]
         email_keywords = ["mail", "email", "e-mail", "address"]
         # replace to have visual demo
-        # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
-        browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH)
+        browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
+        # browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH)
         page = await browser.newPage()
         logger.info(f"Accès à {url}...")
         await page.goto(url, {'timeout': 10000})
-        
+
         # Recherche des formulaires sur la page
         forms = await page.querySelectorAll("form")
         login_form = None
@@ -105,7 +105,7 @@ async def attempt_signup(url, test_data):
             logger.error("Aucun formulaire trouvé sur la page.")
             await browser.close()
             return None
-        
+
         # Récupération et remplissage dynamique des champs du formulaire
         inputs = await login_form.querySelectorAll("input")
         # On utilise une variable dans test_data pour suivre le remplissage du premier champ password
@@ -140,7 +140,7 @@ async def attempt_signup(url, test_data):
             await page.evaluate('(form) => form.submit()', login_form)
         
         # Attendre quelques secondes pour le rechargement
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
         content = await page.content()
         await browser.close()
         return content
@@ -156,8 +156,8 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
         return vuln_list
     
     test_data = {
-        "username": "HERMEStest1",
-        "email": "ASVSHermesTest1@gmail.com",
+        "username": "1HERMEStest",
+        "email": "1ASVSHermesTest@gmail.com",
         "password": "Elev3nwr@ng",
         "confirm_password": "Elev3nwr@ng"
     }
@@ -165,8 +165,7 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
     content = await attempt_signup(url, test_data)
     if content:
         lower_content = content.lower()
-        sign_in_keywords = ["sign out", "logout", "log out"]
-        if lower_content and any(keyword in lower_content for keyword in sign_in_keywords) and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
             add_entry_to_json(
                 "V2.1.1",
                 "Password Security",
@@ -184,18 +183,16 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
 
     long_password = "a" * 129
     test_data = {
-        "username": "HERMEStest2",
-        "email": "ASVSHermesTest2@gmail.com",
+        "username": "2HERMEStest",
+        "email": "2ASVSHermesTest@gmail.com",
         "password": long_password,
         "confirm_password": long_password
     }
 
-        
     content = await attempt_signup(url, test_data)
     if content:
         lower_content = content.lower()
-        sign_in_keywords = ["sign out", "logout", "log out"]
-        if lower_content and (not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS) or any(keyword in lower_content for keyword in sign_in_keywords)):
+        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
             add_entry_to_json(
                 "V2.1.2",
                 "Password Security",
@@ -203,3 +200,64 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
             )
             vuln_list.append(["Password Security", "Password accepted with more than 128 characters"])
     return vuln_list
+
+async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
+    """
+    Vérifie si le mot de passe est tronqué
+    """
+    if constants.HAS_CAPTCHA:
+        return vuln_list
+
+    long_password = "a" * 72
+    test_data = {
+        "username": "2HERMEStest",
+        "email": "2ASVSHermesTest@gmail.com",
+        "password": long_password,
+        "confirm_password": long_password
+    }
+
+    content = await attempt_signup(url, test_data)
+    if content:
+        lower_content = content.lower()
+        created_account_keywords = ["account created", "successfully", "success"]
+        if lower_content and any(keyword in lower_content for keyword in created_account_keywords):
+            return vuln_list
+        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+            add_entry_to_json(
+                "V2.1.2",
+                "Password Security",
+                "User password truncation is performed and accepted"
+            )
+            vuln_list.append(["Password Security", "Password truncation is performed and accepted"])
+    return vuln_list
+
+async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
+    """
+    Vérifie si un mot de passe accepte des charactère unicode ainsi que des emojis
+    """
+    if constants.HAS_CAPTCHA:
+        return vuln_list
+
+    weird_password = "☺☺☺🤖☻♥♦♣♠•◘○♦P4ssw@rd😁😎"
+    test_data = {
+        "username": "2HERMEStest",
+        "email": "2ASVSHermesTest@gmail.com",
+        "password": weird_password,
+        "confirm_password": weird_password
+    }
+
+    content = await attempt_signup(url, test_data)
+    if content:
+        lower_content = content.lower()
+        if lower_content and validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+            add_entry_to_json(
+                "V2.1.2",
+                "Password Security",
+                "User password doesn't accept unicode and emojis"
+            )
+            vuln_list.append(["Password Security", "Password doesn't accept unicode and emojis"])
+    return vuln_list
+
+## check_asvs_l1_password_security_V2_1_5 doit pouvoir vérifier si un utilisateur peut modifier son mot de passe
+
+## check_asvs_l1_password_security_V2_1_6 doit pouvoir vérifier que le changement de mot de passe demande l'ancien mot de passe
