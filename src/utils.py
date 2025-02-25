@@ -156,5 +156,7 @@ function_check_list = []
 function_list = [
     check_asvs_l1_password_security_V2_1_1, 
     check_asvs_l1_password_security_V2_1_2,
-    check_asvs_l1_password_security_V2_1_3
+    check_asvs_l1_password_security_V2_1_3,
+    check_asvs_l1_password_security_V2_1_4,
+##    check_asvs_l1_password_security_V2_1_7
 ]

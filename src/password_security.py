@@ -88,8 +88,8 @@ async def attempt_signup(url, test_data):
         username_keywords = ["user", "username", "login", "uid", "account"]
         email_keywords = ["mail", "email", "e-mail", "address"]
         # replace to have visual demo
-        browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
-        # browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH)
+        # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
+        browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH)
         page = await browser.newPage()
         logger.info(f"Accès à {url}...")
         await page.goto(url, {'timeout': 10000})
@@ -140,7 +140,7 @@ async def attempt_signup(url, test_data):
             await page.evaluate('(form) => form.submit()', login_form)
         
         # Attendre quelques secondes pour le rechargement
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.1)
         content = await page.content()
         await browser.close()
         return content
@@ -208,14 +208,22 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
     if constants.HAS_CAPTCHA:
         return vuln_list
 
-    long_password = "a" * 72
+    long_password = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx"
     test_data = {
-        "username": "2HERMEStest",
-        "email": "2ASVSHermesTest@gmail.com",
+        "username": "3HERMEStest",
+        "email": "3ASVSHermesTest@gmail.com",
         "password": long_password,
         "confirm_password": long_password
     }
+    content = await attempt_signup(url, test_data)
 
+    long_password = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrst"
+    test_data = {
+        "username": "3HERMEStest",
+        "email": "3ASVSHermesTest@gmail.com",
+        "password": long_password,
+        "confirm_password": long_password
+    }
     content = await attempt_signup(url, test_data)
     if content:
         lower_content = content.lower()
@@ -224,7 +232,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
             return vuln_list
         if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
             add_entry_to_json(
-                "V2.1.2",
+                "V2.1.3",
                 "Password Security",
                 "User password truncation is performed and accepted"
             )
@@ -240,8 +248,8 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
 
     weird_password = "☺☺☺🤖☻♥♦♣♠•◘○♦P4ssw@rd😁😎"
     test_data = {
-        "username": "2HERMEStest",
-        "email": "2ASVSHermesTest@gmail.com",
+        "username": "4HERMEStest",
+        "email": "4ASVSHermesTest@gmail.com",
         "password": weird_password,
         "confirm_password": weird_password
     }
@@ -251,7 +259,7 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
         lower_content = content.lower()
         if lower_content and validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
             add_entry_to_json(
-                "V2.1.2",
+                "V2.1.4",
                 "Password Security",
                 "User password doesn't accept unicode and emojis"
             )
@@ -261,3 +269,32 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
 ## check_asvs_l1_password_security_V2_1_5 doit pouvoir vérifier si un utilisateur peut modifier son mot de passe
 
 ## check_asvs_l1_password_security_V2_1_6 doit pouvoir vérifier que le changement de mot de passe demande l'ancien mot de passe
+
+async def check_asvs_l1_password_security_V2_1_7(vuln_list, url):
+    """
+    Vérifie si le mot de passe accepte les mots de passe les plus utilisés
+    """
+    if constants.HAS_CAPTCHA:
+        return vuln_list
+
+    with open("./data/1000-most-common-passwords.txt") as file:
+        for line in file:
+            weird_password = line.rstrip()
+            test_data = {
+                "username": "7HERMEStest",
+                "email": "7ASVSHermesTest@gmail.com",
+                "password": weird_password,
+                "confirm_password": weird_password
+            }
+            content = await attempt_signup(url, test_data)
+            if content:
+                lower_content = content.lower()
+                if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+                    add_entry_to_json(
+                        "V2.1.7",
+                        "Password Security",
+                        "User password accept one of the 1000 most common passwords"
+                    )
+                    vuln_list.append(["Password Security", "Password accept one of the 1000 most common passwords"])
+                    return vuln_list
+    return vuln_list
