@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from collections import deque
 from password_security import *
-from constants import *
+import constants as constants
 from json_edit import *
 import logging
 
@@ -89,6 +89,10 @@ async def process_forms(vuln_list, forms, url, browser):
     return vuln_list
 
 def check_for_captcha(HTML_soup):
+    """
+    Vérifie si la page contient des éléments indiquant une vérification captcha.
+    Retourne True si trouvé, sinon False.
+    """
     captcha_keywords = ["captcha", "g-recaptcha", "h-captcha", "grecaptcha", "verify you're human"]
 
     if any(keyword in HTML_soup.text.lower() for keyword in captcha_keywords):
@@ -105,6 +109,24 @@ def check_for_captcha(HTML_soup):
         script_src = script.get("src", "")
         if any(keyword in script_src.lower() for keyword in captcha_keywords):
             return True
+    return False
+
+def check_for_identification(HTML_soup):
+    """
+    Vérifie si la page contient des éléments indiquant une identification ou un formulaire d'authentification.
+    Retourne True si trouvé, sinon False.
+    """
+    if HTML_soup.find("input", {"type": "password"}):
+        return True
+
+    identification_keywords = [
+        "username", "email", "e-mail", "mail", "name", "id"
+    ]
+    for input_field in HTML_soup.find_all("input"):
+        input_name = input_field.get("name", "").lower()
+        for keyword in identification_keywords:
+            if keyword in input_name:
+                return True
     return False
 
 async def process_url(url):
@@ -140,7 +162,8 @@ async def process_url(url):
         add_link_to_json(link)
         soup = BeautifulSoup(html, 'html.parser')
         constants.HAS_CAPTCHA = check_for_captcha(soup)
-        
+        constants.HAS_INDENTIFICATION = check_for_identification(soup)
+
         for function_check in function_list:
             vuln_list = await function_check(vuln_list, link)
         
@@ -154,7 +177,7 @@ async def process_url(url):
 function_check_list = []
 
 function_list = [
-    check_asvs_l1_password_security_V2_1_1, 
+    check_asvs_l1_password_security_V2_1_1,
     check_asvs_l1_password_security_V2_1_2,
     check_asvs_l1_password_security_V2_1_3,
     check_asvs_l1_password_security_V2_1_4,

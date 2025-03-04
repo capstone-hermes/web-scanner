@@ -1,9 +1,8 @@
 import asyncio
 import json
 import re
-from urllib.parse import urljoin, urlencode
 from bs4 import BeautifulSoup
-import constants
+import constants as constants
 from json_edit import add_entry_to_json
 import logging
 from pyppeteer import launch
@@ -14,13 +13,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-PASSWORD_ERROR_PATTERNS = [
-    r"too short",
-    r"must be at least",
-    r"invalid",
-    r"error"
-]
 
 def detect_token(soup):
     """
@@ -87,7 +79,7 @@ async def attempt_signup(url, test_data):
     try:
         username_keywords = ["user", "username", "login", "uid", "account"]
         email_keywords = ["mail", "email", "e-mail", "address"]
-        # replace to have visual demo
+        # Remplacer pour avoir une demo visuel
         # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
         browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH)
         page = await browser.newPage()
@@ -136,11 +128,13 @@ async def attempt_signup(url, test_data):
         submit_button = await login_form.querySelector("button[type='submit'], input[type='submit']")
         if submit_button:
             await submit_button.click()
+            await page.waitForNavigation({'timeout': 10000})
         else:
             await page.evaluate('(form) => form.submit()', login_form)
+            await page.waitForNavigation({'timeout': 10000})
         
         # Attendre quelques secondes pour le rechargement
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(1)
         content = await page.content()
         await browser.close()
         return content
@@ -152,7 +146,7 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
     """
     Vérifie si la politique de mot de passe force un minimum de 12 caractères
     """
-    if constants.HAS_CAPTCHA:
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
     
     test_data = {
@@ -165,7 +159,7 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
     content = await attempt_signup(url, test_data)
     if content:
         lower_content = content.lower()
-        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        if lower_content and not validate_password_policy(lower_content, constants.PASSWORD_ERROR_PATTERNS):
             add_entry_to_json(
                 "V2.1.1",
                 "Password Security",
@@ -178,7 +172,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
     """
     Vérifie si un mot de passe de plus de 128 caractères est accepté
     """
-    if constants.HAS_CAPTCHA:
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
     long_password = "a" * 129
@@ -192,7 +186,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
     content = await attempt_signup(url, test_data)
     if content:
         lower_content = content.lower()
-        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        if lower_content and not validate_password_policy(lower_content, constants.PASSWORD_ERROR_PATTERNS):
             add_entry_to_json(
                 "V2.1.2",
                 "Password Security",
@@ -205,7 +199,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
     """
     Vérifie si le mot de passe est tronqué
     """
-    if constants.HAS_CAPTCHA:
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
     long_password = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx"
@@ -230,7 +224,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
         created_account_keywords = ["account created", "successfully", "success"]
         if lower_content and any(keyword in lower_content for keyword in created_account_keywords):
             return vuln_list
-        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        if lower_content and not validate_password_policy(lower_content, constants.PASSWORD_ERROR_PATTERNS):
             add_entry_to_json(
                 "V2.1.3",
                 "Password Security",
@@ -243,7 +237,7 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
     """
     Vérifie si un mot de passe accepte des charactère unicode ainsi que des emojis
     """
-    if constants.HAS_CAPTCHA:
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
     weird_password = "☺☺☺🤖☻♥♦♣♠•◘○♦P4ssw@rd😁😎"
@@ -257,7 +251,10 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
     content = await attempt_signup(url, test_data)
     if content:
         lower_content = content.lower()
-        if lower_content and validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        already_existing_user_keywords = ["exists", "already", "taken"]
+        if lower_content and any(keyword in lower_content for keyword in already_existing_user_keywords):
+            return vuln_list
+        if lower_content and validate_password_policy(lower_content, constants.PASSWORD_ERROR_PATTERNS):
             add_entry_to_json(
                 "V2.1.4",
                 "Password Security",
@@ -274,7 +271,7 @@ async def check_asvs_l1_password_security_V2_1_7(vuln_list, url):
     """
     Vérifie si le mot de passe accepte les mots de passe les plus utilisés
     """
-    if constants.HAS_CAPTCHA:
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
     with open("./data/1000-most-common-passwords.txt") as file:
@@ -289,7 +286,7 @@ async def check_asvs_l1_password_security_V2_1_7(vuln_list, url):
             content = await attempt_signup(url, test_data)
             if content:
                 lower_content = content.lower()
-                if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+                if lower_content and not validate_password_policy(lower_content, constants.PASSWORD_ERROR_PATTERNS):
                     add_entry_to_json(
                         "V2.1.7",
                         "Password Security",
