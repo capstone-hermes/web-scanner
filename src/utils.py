@@ -118,6 +118,8 @@ async def process_url(url):
     clear_json()
     if not url.startswith("https://"):
         url = "https://" + url
+    if not url.endswith("/"):
+        url = url + "/"
 
     try:
         links = await get_internal_links_async(url, max_pages=100, max_depth=3, batch_size=10)
@@ -140,6 +142,7 @@ async def process_url(url):
         add_link_to_json(link)
         soup = BeautifulSoup(html, 'html.parser')
         constants.HAS_CAPTCHA = check_for_captcha(soup)
+        constants.HAS_INDENTIFICATION = check_for_identification(soup)
         
         for function_check in function_list:
             vuln_list = await function_check(vuln_list, link)
@@ -157,6 +160,6 @@ function_list = [
     check_asvs_l1_password_security_V2_1_1, 
     check_asvs_l1_password_security_V2_1_2,
     check_asvs_l1_password_security_V2_1_3,
-    check_asvs_l1_password_security_V2_1_4,
+    check_asvs_l1_password_security_V2_1_4
 ##    check_asvs_l1_password_security_V2_1_7
 ]
