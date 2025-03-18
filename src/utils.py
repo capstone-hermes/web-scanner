@@ -107,6 +107,24 @@ def check_for_captcha(HTML_soup):
             return True
     return False
 
+def check_for_identification(HTML_soup):
+     """
+     Vérifie si la page contient des éléments indiquant une identification ou un formulaire d'authentification.
+     Retourne True si trouvé, sinon False.
+     """
+     if HTML_soup.find("input", {"type": "password"}):
+         return True
+ 
+     identification_keywords = [
+         "username", "email", "e-mail", "mail", "name", "id"
+     ]
+     for input_field in HTML_soup.find_all("input"):
+         input_name = input_field.get("name", "").lower()
+         for keyword in identification_keywords:
+             if keyword in input_name:
+                 return True
+     return False
+
 async def process_url(url):
     """
     Fonction principale qui :
@@ -118,6 +136,8 @@ async def process_url(url):
     clear_json()
     if not url.startswith("https://"):
         url = "https://" + url
+    if not url.endswith("/"):
+        url = url + "/"
 
     try:
         links = await get_internal_links_async(url, max_pages=100, max_depth=3, batch_size=10)
@@ -140,6 +160,7 @@ async def process_url(url):
         add_link_to_json(link)
         soup = BeautifulSoup(html, 'html.parser')
         constants.HAS_CAPTCHA = check_for_captcha(soup)
+        constants.HAS_INDENTIFICATION = check_for_identification(soup)
         
         for function_check in function_list:
             vuln_list = await function_check(vuln_list, link)
@@ -157,6 +178,6 @@ function_list = [
     check_asvs_l1_password_security_V2_1_1, 
     check_asvs_l1_password_security_V2_1_2,
     check_asvs_l1_password_security_V2_1_3,
-    check_asvs_l1_password_security_V2_1_4,
+    check_asvs_l1_password_security_V2_1_4
 ##    check_asvs_l1_password_security_V2_1_7
 ]
