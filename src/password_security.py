@@ -7,6 +7,7 @@ import constants
 from json_edit import add_entry_to_json
 import logging
 from pyppeteer import launch
+import platform
 
 # Configuration du logger
 logging.basicConfig(
@@ -89,7 +90,10 @@ async def attempt_signup(url, test_data):
         email_keywords = ["mail", "email", "e-mail", "address"]
         # replace to have visual demo
         # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
-        browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH)
+        browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
+            '--no-sandbox',  # necessary when running as root in Docker
+            '--disable-setuid-sandbox'
+        ])
         page = await browser.newPage()
         logger.info(f"Accès à {url}...")
         await page.goto(url, {'timeout': 10000})
