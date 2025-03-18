@@ -45,8 +45,11 @@ async def get_internal_links_async(start_url, max_pages=100, max_depth=3, batch_
     domain = urlparse(start_url).netloc
     visited = set()
     queue = deque([(start_url, 0)])
-    
-    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH)
+
+    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
+            '--no-sandbox',  # necessary when running as root in Docker
+            '--disable-setuid-sandbox'
+        ])
     while queue and len(visited) < max_pages:
         batch = []
         while queue and len(batch) < batch_size:
@@ -151,8 +154,11 @@ async def process_url(url):
 
     vuln_list = []
     set_json(links[0])
-    
-    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH)
+
+    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
+            '--no-sandbox',  # necessary when running as root in Docker
+            '--disable-setuid-sandbox'
+        ])
     for link in links:
         html = await fetch_async_pyppeteer(browser, link)
         if not html:
