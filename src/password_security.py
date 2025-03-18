@@ -148,24 +148,6 @@ async def attempt_signup(url, test_data):
         logger.error(f"Erreur lors de l'inscription: {e}")
         return None
 
-def check_for_identification(HTML_soup):
-     """
-     Vérifie si la page contient des éléments indiquant une identification ou un formulaire d'authentification.
-     Retourne True si trouvé, sinon False.
-     """
-     if HTML_soup.find("input", {"type": "password"}):
-         return True
- 
-     identification_keywords = [
-         "username", "email", "e-mail", "mail", "name", "id"
-     ]
-     for input_field in HTML_soup.find_all("input"):
-         input_name = input_field.get("name", "").lower()
-         for keyword in identification_keywords:
-             if keyword in input_name:
-                 return True
-     return False
-
 async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
     """
     Vérifie si la politique de mot de passe force un minimum de 12 caractères

@@ -107,6 +107,24 @@ def check_for_captcha(HTML_soup):
             return True
     return False
 
+def check_for_identification(HTML_soup):
+     """
+     Vérifie si la page contient des éléments indiquant une identification ou un formulaire d'authentification.
+     Retourne True si trouvé, sinon False.
+     """
+     if HTML_soup.find("input", {"type": "password"}):
+         return True
+ 
+     identification_keywords = [
+         "username", "email", "e-mail", "mail", "name", "id"
+     ]
+     for input_field in HTML_soup.find_all("input"):
+         input_name = input_field.get("name", "").lower()
+         for keyword in identification_keywords:
+             if keyword in input_name:
+                 return True
+     return False
+
 async def process_url(url):
     """
     Fonction principale qui :
