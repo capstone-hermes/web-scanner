@@ -1,9 +1,18 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import subprocess
 import json
 import os
 
 app = FastAPI(title="Web Scanner API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Autorise les requêtes de l'URL de ton front-end
+    allow_credentials=True,
+    allow_methods=["*"],  # Autorise toutes les méthodes HTTP
+    allow_headers=["*"],  # Autorise tous les headers
+)
 
 @app.get("/scan")
 async def perform_scan(url: str):
