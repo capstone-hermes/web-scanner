@@ -23,5 +23,5 @@ Access the API:
 ## Docker
 ```
 docker build -t web-scanner .
-docker run web-scanner <url>
+docker run web-scanner python src/main.py <url>
 ```

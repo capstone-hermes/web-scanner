@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set environment variable to avoid redundant chromium download
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Copy Python dependencies
 COPY requirements.txt ./
