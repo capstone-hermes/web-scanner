@@ -137,7 +137,7 @@ async def process_url(url):
         analyse la page (formulaires, captcha, etc.) et exécute les fonctions de scan.
     """
     await clear_json()
-    if not url.startswith("https://"):
+    if not url.startswith("https://") or not url.startswith("http://"):
         url = "https://" + url
     if not url.endswith("/"):
         url = url + "/"
