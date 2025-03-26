@@ -136,7 +136,7 @@ async def process_url(url):
         pour chaque URL récupérée, charge la page via pyppeteer,
         analyse la page (formulaires, captcha, etc.) et exécute les fonctions de scan.
     """
-    clear_json()
+    await clear_json()
     if not url.startswith("https://"):
         url = "https://" + url
     if not url.endswith("/"):
@@ -153,7 +153,7 @@ async def process_url(url):
         return 1
 
     vuln_list = []
-    set_json(links[0])
+    await set_json(links[0])
 
     browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
             '--no-sandbox',  # necessary when running as root in Docker
@@ -163,14 +163,23 @@ async def process_url(url):
         html = await fetch_async_pyppeteer(browser, link)
         if not html:
             continue
-        add_link_to_json(link)
+        await add_link_to_json(link)
         soup = BeautifulSoup(html, 'html.parser')
         constants.HAS_CAPTCHA = check_for_captcha(soup)
         constants.HAS_INDENTIFICATION = check_for_identification(soup)
         
-        for function_check in function_list:
-            vuln_list = await function_check(vuln_list, link)
-        
+        tasks = [function_check(vuln_list, link) for function_check in function_list]
+        functions = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for function_result in functions:
+            if isinstance(function_result, Exception):
+                logger.error(f"Error in function check: {function_result}")
+            else:
+                for vuln in function_result:
+                    if vuln not in vuln_list:
+                        vuln_list.append(vuln)
+
+        # Process forms as before.
         vuln_list = await process_forms(vuln_list, soup.find_all('form'), link, browser)
     await browser.close()
     logger.info(f"Vulnérabilités détectées : {vuln_list}")
@@ -184,6 +193,7 @@ function_list = [
     check_asvs_l1_password_security_V2_1_1, 
     check_asvs_l1_password_security_V2_1_2,
     check_asvs_l1_password_security_V2_1_3,
-    check_asvs_l1_password_security_V2_1_4
+    check_asvs_l1_password_security_V2_1_4,
 ##    check_asvs_l1_password_security_V2_1_7
+    check_asvs_l1_password_security_V2_1_8
 ]

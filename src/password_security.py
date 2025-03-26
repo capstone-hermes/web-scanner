@@ -7,7 +7,6 @@ import constants
 from json_edit import add_entry_to_json
 import logging
 from pyppeteer import launch
-import platform
 
 # Configuration du logger
 logging.basicConfig(
@@ -170,7 +169,7 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
     if content:
         lower_content = content.lower()
         if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
-            add_entry_to_json(
+            await add_entry_to_json(
                 "V2.1.1",
                 "Password Security",
                 "User password isn't required to be at least 12 characters in length"
@@ -197,7 +196,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
     if content:
         lower_content = content.lower()
         if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
-            add_entry_to_json(
+            await add_entry_to_json(
                 "V2.1.2",
                 "Password Security",
                 "User password is allowed with more than 128 characters"
@@ -235,7 +234,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
         if lower_content and any(keyword in lower_content for keyword in created_account_keywords):
             return vuln_list
         if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
-            add_entry_to_json(
+            await add_entry_to_json(
                 "V2.1.3",
                 "Password Security",
                 "User password truncation is performed and accepted"
@@ -265,7 +264,7 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
         if lower_content and any(keyword in lower_content for keyword in already_existing_user_keywords):
             return vuln_list
         if lower_content and validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
-            add_entry_to_json(
+            await add_entry_to_json(
                 "V2.1.4",
                 "Password Security",
                 "User password doesn't accept unicode and emojis"
@@ -297,11 +296,62 @@ async def check_asvs_l1_password_security_V2_1_7(vuln_list, url):
             if content:
                 lower_content = content.lower()
                 if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
-                    add_entry_to_json(
+                    await add_entry_to_json(
                         "V2.1.7",
                         "Password Security",
-                        "User password accept one of the 1000 most common passwords"
+                        "User password accepts one of the 1000 most common passwords"
                     )
-                    vuln_list.append(["Password Security", "Password accept one of the 1000 most common passwords"])
+                    vuln_list.append(["Password Security", "Password accepts one of the 1000 most common passwords"])
                     return vuln_list
+    return vuln_list
+
+def check_login_button(content):
+    """
+    Check if the content contains a submit button (or similar) with login keywords.
+    Args: content (str): The HTML content of a page.
+    Returns: bool: True if a login-like submit button is found, False otherwise.
+    """
+    soup = BeautifulSoup(content, 'html.parser')
+
+    login_keywords = ["login", "log in", "sign in", "signin", "connexion", "sign-in", "log-in"]
+    for button in soup.find_all('button'):
+        text = button.get_text().strip().lower()
+        if any(keyword in text for keyword in login_keywords):
+            return True
+
+    for input_elem in soup.find_all('input'):
+        input_type = input_elem.get('type', '').lower()
+        if input_type in ['submit', 'button']:
+            value = input_elem.get('value', '').lower()
+            if any(keyword in value for keyword in login_keywords):
+                return True
+    return False
+
+async def check_asvs_l1_password_security_V2_1_8(vuln_list, url):
+    """
+    Vérifie si le mot de passe a une aide pour montrer sa force a l'utilisateur
+    """
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
+        return vuln_list
+
+    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
+            '--no-sandbox',  # necessary when running as root in Docker
+            '--disable-setuid-sandbox'
+        ])
+    page = await browser.newPage()
+    await page.goto(url, {'timeout': 20000})
+    content = await page.content()
+    await browser.close()
+    if content:
+        lower_content = content.lower()
+        if check_login_button(content):
+            return vuln_list
+        meter_keywords = ["#strength-meter", ".password-strength", ".meter", "[data-strength]"]
+        if lower_content and not any(keyword in lower_content for keyword in meter_keywords):
+            await add_entry_to_json(
+                "V2.1.8",
+                "Password Security",
+                "There is no password strenght meter to help the user"
+            )
+            vuln_list.append(["Password Security", "There is no password strenght meter to help the user"])
     return vuln_list
