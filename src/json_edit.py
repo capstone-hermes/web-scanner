@@ -1,71 +1,85 @@
 import json
 import os
 from pathlib import Path
+from datetime import datetime
 from constants import *
 
 #############################################################################
-## Modifying and Writing entries in the json file
+## Initialiser ou Modifier le JSON
 #############################################################################
 
 async def set_json(url):
     async with JSON_LOCK:
-        if Path(JSONNAME).is_file():
-            with open(JSONNAME, 'r') as file:
-                data = json.load(file)
-        else:
-            data = []
-
-        start_entry = {
-            "URL_scanned": url
+        data = {
+            "data": {
+                "url": url,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "findings": []
+            }
         }
-        data.append(start_entry)
+
         with open(JSONNAME, 'w') as file:
             json.dump(data, file, indent=4)
-        file.close()
 
-## Args: name (str): Name / ID of the ASVS entry
-##       found_in (str): name of the ASVS section name
-##       form_name (str): 
-## Returns: No return
-## if the entry doesn't have a name, put "" (or an empty string) for the 'form_name' parameter. Same for info
+#############################################################################
+## Ajouter une vulnérabilité dans findings[]
+## Args: name (str): ID de l'entrée ASVS (ex: "2.1.1")
+##       found_in (str): chapitre (ex: "Authentication")
+##       info (str): description de la faille
+#############################################################################
+
 async def add_entry_to_json(name, found_in, info):
     async with JSON_LOCK:
-        if Path(JSONNAME).is_file():
-            with open(JSONNAME, 'r') as file:
-                data = json.load(file)
+        if not Path(JSONNAME).is_file():
+            raise FileNotFoundError("JSON file not initialized. Call set_json(url) first.")
 
-        if not any(isinstance(entry, dict) and "Findings" in entry for entry in data):
-            data.append({"Findings": []})
+        with open(JSONNAME, 'r') as file:
+            data = json.load(file)
 
-        findings_entry = next(entry for entry in data if "Findings" in entry)
-        findings_entry["Findings"].append({
-            "Name": name,
-            "Found_in": found_in,
-            "Info": info
-        })
+        new_finding = {
+            "id": name,
+            "chapter": "", # champ vide par défaut
+            "section": found_in or "",
+            "description": info or "",
+            "url": ""       # champ vide par défaut
+        }
+
+        data["data"]["findings"].append(new_finding)
 
         with open(JSONNAME, 'w') as file:
             json.dump(data, file, indent=4)
 
-## Args: link (str): Link to a scanned page that will be added to the json
-## Returns: No return
+#############################################################################
+## Ajouter un lien (deprecated si on utilise findings.url)
+## Conservé si nécessaire pour compatibilité future
+#############################################################################
+
 async def add_link_to_json(link):
     async with JSON_LOCK:
-        if Path(JSONNAME).is_file():
-            with open(JSONNAME, 'r') as file:
-                data = json.load(file)
+        if not Path(JSONNAME).is_file():
+            raise FileNotFoundError("JSON file not initialized. Call set_json(url) first.")
 
-        if not any(isinstance(entry, dict) and "All_URL_Scanned" in entry for entry in data):
-            data.append({"All_URL_Scanned": []})
+        with open(JSONNAME, 'r') as file:
+            data = json.load(file)
 
-        All_URL_Scanned_entry = next(entry for entry in data if "All_URL_Scanned" in entry)
-        All_URL_Scanned_entry["All_URL_Scanned"].append({
-            "URL": link
-        })
+        # Ajoute un finding générique avec uniquement l’URL si besoin
+        # (déprécié si on utilise findings.url) Donc on le garde pour compatibilité future
+        # data["data"]["findings"].append({
+        #     "id": "",
+        #     "chapter": "",
+        #     "section": "",
+        #     "description": "",
+        #     "url": link
+        # })
 
         with open(JSONNAME, 'w') as file:
             json.dump(data, file, indent=4)
+
         return True
+
+#############################################################################
+## Supprimer le fichier JSON existant
+#############################################################################
 
 async def clear_json():
     async with JSON_LOCK:
