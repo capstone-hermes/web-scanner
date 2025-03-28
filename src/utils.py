@@ -137,6 +137,11 @@ async def process_url(url):
         analyse la page (formulaires, captcha, etc.) et exécute les fonctions de scan.
     """
     await clear_json()
+    if "http://localhost" in url:
+        url = url.replace("localhost", "host.docker.internal")
+        index = url.find("host.docker.internal")
+        actual_index = index + len("host.docker.internal")
+        url = url[:actual_index]
     if not url.startswith("https://") and not url.startswith("http://"):
         url = "https://" + url
     if not url.endswith("/"):
@@ -195,5 +200,6 @@ function_list = [
     check_asvs_l1_password_security_V2_1_3,
     check_asvs_l1_password_security_V2_1_4,
 ##    check_asvs_l1_password_security_V2_1_7
-    check_asvs_l1_password_security_V2_1_8
+    check_asvs_l1_password_security_V2_1_8,
+    check_asvs_l1_password_security_V2_1_12
 ]

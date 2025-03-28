@@ -95,7 +95,7 @@ async def attempt_signup(url, test_data):
         ])
         page = await browser.newPage()
         logger.info(f"Accès à {url}...")
-        await page.goto(url, {'timeout': 10000})
+        response = await page.goto(url, {'timeout': 10000})
 
         # Recherche des formulaires sur la page
         forms = await page.querySelectorAll("form")
@@ -107,7 +107,7 @@ async def attempt_signup(url, test_data):
         if not login_form:
             logger.error("Aucun formulaire trouvé sur la page.")
             await browser.close()
-            return None
+            return None, None
 
         # Récupération et remplissage dynamique des champs du formulaire
         inputs = await login_form.querySelectorAll("input")
@@ -145,11 +145,12 @@ async def attempt_signup(url, test_data):
         # Attendre quelques secondes pour le rechargement
         await asyncio.sleep(2)
         content = await page.content()
+        status = response.status
         await browser.close()
-        return content
+        return content, status
     except Exception as e:
         logger.error(f"Erreur lors de l'inscription: {e}")
-        return None
+        return None, None
 
 async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
     """
@@ -165,7 +166,9 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
         "confirm_password": "Elev3nwr@ng"
     }
 
-    content = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data)
+    if status and status >= 400:
+        return vuln_list
     if content:
         lower_content = content.lower()
         if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
@@ -192,7 +195,9 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
         "confirm_password": long_password
     }
 
-    content = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data)
+    if status and status >= 400:
+        return vuln_list
     if content:
         lower_content = content.lower()
         if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
@@ -218,7 +223,9 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
         "password": long_password,
         "confirm_password": long_password
     }
-    content = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data)
+    if status and status >= 400:
+        return vuln_list
 
     long_password = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrst"
     test_data = {
@@ -227,7 +234,9 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
         "password": long_password,
         "confirm_password": long_password
     }
-    content = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data)
+    if status and status >= 400:
+        return vuln_list
     if content:
         lower_content = content.lower()
         created_account_keywords = ["account created", "successfully", "success"]
@@ -257,7 +266,9 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
         "confirm_password": weird_password
     }
 
-    content = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data)
+    if status and status >= 400:
+        return vuln_list
     if content:
         lower_content = content.lower()
         already_existing_user_keywords = ["exists", "already", "taken"]
@@ -292,7 +303,9 @@ async def check_asvs_l1_password_security_V2_1_7(vuln_list, url):
                 "password": weird_password,
                 "confirm_password": weird_password
             }
-            content = await attempt_signup(url, test_data)
+            content, status = await attempt_signup(url, test_data)
+            if status and status >= 400:
+                return vuln_list
             if content:
                 lower_content = content.lower()
                 if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
@@ -307,9 +320,9 @@ async def check_asvs_l1_password_security_V2_1_7(vuln_list, url):
 
 def check_login_button(content):
     """
-    Check if the content contains a submit button (or similar) with login keywords.
-    Args: content (str): The HTML content of a page.
-    Returns: bool: True if a login-like submit button is found, False otherwise.
+    Check if the content contains a submit button (or similar) with login keywords
+    Args: content (str): The HTML content of a page
+    Returns: bool: True if a login-like submit button is found, False otherwise
     """
     soup = BeautifulSoup(content, 'html.parser')
 
@@ -354,4 +367,51 @@ async def check_asvs_l1_password_security_V2_1_8(vuln_list, url):
                 "There is no password strenght meter to help the user"
             )
             vuln_list.append(["Password Security", "There is no password strenght meter to help the user"])
+    return vuln_list
+
+def can_see_password(content):
+    """
+    Check if the HTML contains a password input field with an associated toggle control to show/hide the password
+    Args: content (str): The HTML content of a page
+    Returns: bool: True if a toggle control is likely present, False otherwise
+    """
+    soup = BeautifulSoup(content, 'html.parser')
+    password_input = soup.find('input', {'type': 'password'})
+    if not password_input:
+        return False
+
+    toggle_indicators = ["toggle-password", "show-password", "password-toggle", "fa-eye", "fa-eye-slash", "toggleVisibility"]
+    for element in soup.find_all(True):
+        classes = element.get('class', [])
+        element_id = element.get('id', '').lower()
+        if any(indicator in element_id for indicator in toggle_indicators):
+            return True
+        if any(any(indicator in cls.lower() for indicator in toggle_indicators) for cls in classes):
+            return True
+    return False
+
+async def check_asvs_l1_password_security_V2_1_12(vuln_list, url):
+    """
+    Vérifie si le mot de passe a une aide pour montrer sa force a l'utilisateur
+    """
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
+        return vuln_list
+
+    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
+            '--no-sandbox',  # necessary when running as root in Docker
+            '--disable-setuid-sandbox'
+        ])
+    page = await browser.newPage()
+    await page.goto(url, {'timeout': 20000})
+    content = await page.content()
+    await browser.close()
+    if content:
+        lower_content = content.lower()
+        if lower_content and not can_see_password(content):
+            await add_entry_to_json(
+                "V2.1.12",
+                "Password Security",
+                "The password cannot be shown nor viewed"
+            )
+            vuln_list.append(["Password Security", "The password cannot be shown nor viewed"])
     return vuln_list
