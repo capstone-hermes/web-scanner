@@ -207,6 +207,28 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
                 "User password is allowed with more than 128 characters"
             )
             vuln_list.append(["Password Security", "Password accepted with more than 128 characters"])
+            return vuln_list
+
+    long_password = "l8(szc?F*~x5[1u3><IOY6yq}N$Si*cG<ledceq5_è(lhtiER^$3Y9\D6l\^!9bP"
+    test_data = {
+        "username": "2aHERMEStest",
+        "email": "2aASVSHermesTest@gmail.com",
+        "password": long_password,
+        "confirm_password": long_password
+    }
+
+    content, status = await attempt_signup(url, test_data)
+    if status and status >= 400:
+        return vuln_list
+    if content:
+        lower_content = content.lower()
+        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+            await add_entry_to_json(
+                "V2.1.2",
+                "Password Security",
+                "User password isn't allowed with more than 64 characters"
+            )
+            vuln_list.append(["Password Security", "Password isn't accepted with more than 64 characters"])
     return vuln_list
 
 async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
@@ -367,6 +389,56 @@ async def check_asvs_l1_password_security_V2_1_8(vuln_list, url):
                 "There is no password strenght meter to help the user"
             )
             vuln_list.append(["Password Security", "There is no password strenght meter to help the user"])
+    return vuln_list
+
+async def check_asvs_l1_password_security_V2_1_11(vuln_list, url):
+    """
+    Vérifie si le mot de passe accepte la fonction "coller" ainsi que les "password helpers" sont acceptés
+    """
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
+        return vuln_list
+
+    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
+            '--no-sandbox',  # necessary when running as root in Docker
+            '--disable-setuid-sandbox'
+        ])
+    page = await browser.newPage()
+    await page.goto(url, {'timeout': 20000})
+    await page.focus('input[type="password"]')
+    passwd2111 = "Elev3nwr@ngG"
+    await page.evaluate(f'''
+        (passwd2111) => {{
+            const input = document.querySelector('input[type="password"]');
+            if (!input) {{
+                console.error("No password field found");
+                return;
+            }}
+            const dataTransfer = new DataTransfer();
+            dataTransfer.setData('text/plain', passwd2111);
+            let pasteEvent;
+            try {{
+                pasteEvent = new ClipboardEvent('paste', {{
+                    bubbles: true,
+                    cancelable: true,
+                    clipboardData: dataTransfer
+                }});
+            }} catch(e) {{
+                pasteEvent = new Event('paste', {{ bubbles: true, cancelable: true }});
+                pasteEvent.clipboardData = dataTransfer;
+            }}
+            input.dispatchEvent(pasteEvent);
+        }}
+    ''', passwd2111)
+    
+    pasted_value = await page.evaluate('document.querySelector("input[type=\'password\']").value')
+    await browser.close()
+    if pasted_value is not passwd2111:
+        await add_entry_to_json(
+            "V2.1.11",
+            "Password Security",
+            "The password cannot be pasted from the clipboard"
+        )
+        vuln_list.append(["Password Security", "The password cannot be pasted from the clipboard"])
     return vuln_list
 
 def can_see_password(content):
