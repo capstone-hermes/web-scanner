@@ -46,6 +46,8 @@ async def get_internal_links_async(start_url, max_pages=100, max_depth=3, batch_
     visited = set()
     queue = deque([(start_url, 0)])
 
+    # replace to have visual demo
+    # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
     browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
             '--no-sandbox',  # necessary when running as root in Docker
             '--disable-setuid-sandbox'
@@ -128,6 +130,20 @@ def check_for_identification(HTML_soup):
                  return True
      return False
 
+async def deduplicate_vuln_list(vuln_list):
+    """
+    Fonction qui supprime les clones dans vuln_list.
+    """
+    checked_tuple = set()
+    cleared_list = []
+    for vuln in vuln_list:
+        vuln_tuple = tuple(vuln)
+        if vuln_tuple not in checked_tuple:
+            checked_tuple.add(vuln_tuple)
+            cleared_list.append(vuln)
+    return cleared_list
+
+
 async def process_url(url):
     """
     Fonction principale qui :
@@ -160,6 +176,8 @@ async def process_url(url):
     vuln_list = []
     await set_json(links[0])
 
+    # replace to have visual demo
+    # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
     browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
             '--no-sandbox',  # necessary when running as root in Docker
             '--disable-setuid-sandbox'
@@ -173,7 +191,7 @@ async def process_url(url):
         constants.HAS_CAPTCHA = check_for_captcha(soup)
         constants.HAS_INDENTIFICATION = check_for_identification(soup)
         
-        tasks = [function_check(vuln_list, link) for function_check in function_list]
+        tasks = [function_check(vuln_list, link, browser) for function_check in function_list]
         functions = await asyncio.gather(*tasks, return_exceptions=True)
 
         for function_result in functions:
@@ -187,6 +205,8 @@ async def process_url(url):
         # Process forms as before.
         vuln_list = await process_forms(vuln_list, soup.find_all('form'), link, browser)
     await browser.close()
+    await deduplicate_json()
+    vuln_list = await deduplicate_vuln_list(vuln_list)
     logger.info(f"Vulnérabilités détectées : {vuln_list}")
     return 0
 
@@ -201,5 +221,6 @@ function_list = [
     check_asvs_l1_password_security_V2_1_4,
 ##    check_asvs_l1_password_security_V2_1_7
     check_asvs_l1_password_security_V2_1_8,
+    check_asvs_l1_password_security_V2_1_11,
     check_asvs_l1_password_security_V2_1_12
 ]

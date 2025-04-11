@@ -68,7 +68,7 @@ def validate_password_policy(response, error_patterns):
         return any(re.search(pattern, response) for pattern in error_patterns)
     return False
 
-async def attempt_signup(url, test_data):
+async def attempt_signup(url, test_data, browser):
     """
     Simule la soumission d'un formulaire d'inscription via pyppeteer.
     
@@ -84,16 +84,12 @@ async def attempt_signup(url, test_data):
       - Soumet le formulaire (en cliquant sur le bouton submit ou en exécutant form.submit()).
       - Attend quelques secondes pour laisser le temps au rechargement et retourne le contenu HTML de la page résultante.
     """
+    page = await browser.newPage()
     try:
         username_keywords = ["user", "username", "login", "uid", "account"]
         email_keywords = ["mail", "email", "e-mail", "address"]
         # replace to have visual demo
         # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
-        browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
-            '--no-sandbox',  # necessary when running as root in Docker
-            '--disable-setuid-sandbox'
-        ])
-        page = await browser.newPage()
         logger.info(f"Accès à {url}...")
         response = await page.goto(url, {'timeout': 10000})
 
@@ -106,7 +102,6 @@ async def attempt_signup(url, test_data):
                 break
         if not login_form:
             logger.error("Aucun formulaire trouvé sur la page.")
-            await browser.close()
             return None, None
 
         # Récupération et remplissage dynamique des champs du formulaire
@@ -146,13 +141,14 @@ async def attempt_signup(url, test_data):
         await asyncio.sleep(2)
         content = await page.content()
         status = response.status
-        await browser.close()
         return content, status
     except Exception as e:
         logger.error(f"Erreur lors de l'inscription: {e}")
         return None, None
+    finally:
+        await page.close()
 
-async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
+async def check_asvs_l1_password_security_V2_1_1(vuln_list, url, browser):
     """
     Vérifie si la politique de mot de passe force un minimum de 12 caractères
     """
@@ -166,12 +162,12 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
         "confirm_password": "Elev3nwr@ng"
     }
 
-    content, status = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data, browser)
     if status and status >= 400:
         return vuln_list
     if content:
         lower_content = content.lower()
-        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        if (lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status < 400):
             await add_entry_to_json(
                 "V2.1.1",
                 "Password Security",
@@ -180,7 +176,7 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url):
             vuln_list.append(["Password Security", "Password accepted with fewer than 12 characters"])
     return vuln_list
 
-async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
+async def check_asvs_l1_password_security_V2_1_2(vuln_list, url, browser):
     """
     Vérifie si un mot de passe de plus de 128 caractères est accepté
     """
@@ -195,12 +191,12 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
         "confirm_password": long_password
     }
 
-    content, status = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data, browser)
     if status and status >= 400:
         return vuln_list
     if content:
         lower_content = content.lower()
-        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        if (lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status < 400):
             await add_entry_to_json(
                 "V2.1.2",
                 "Password Security",
@@ -209,7 +205,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
             vuln_list.append(["Password Security", "Password accepted with more than 128 characters"])
             return vuln_list
 
-    long_password = "l8(szc?F*~x5[1u3><IOY6yq}N$Si*cG<ledceq5_è(lhtiER^$3Y9\D6l\^!9bP"
+    long_password = "l8(szc?F*~x5[1u3><IOY6yq}N$Si*cG<ledceq5_è(lhtiER^$3Y9@D6le^!9bP"
     test_data = {
         "username": "2aHERMEStest",
         "email": "2aASVSHermesTest@gmail.com",
@@ -217,12 +213,12 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
         "confirm_password": long_password
     }
 
-    content, status = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data, browser)
     if status and status >= 400:
         return vuln_list
     if content:
         lower_content = content.lower()
-        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        if (lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status < 400):
             await add_entry_to_json(
                 "V2.1.2",
                 "Password Security",
@@ -231,7 +227,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url):
             vuln_list.append(["Password Security", "Password isn't accepted with more than 64 characters"])
     return vuln_list
 
-async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
+async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
     """
     Vérifie si le mot de passe est tronqué
     """
@@ -245,7 +241,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
         "password": long_password,
         "confirm_password": long_password
     }
-    content, status = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data, browser)
     if status and status >= 400:
         return vuln_list
 
@@ -256,15 +252,13 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
         "password": long_password,
         "confirm_password": long_password
     }
-    content, status = await attempt_signup(url, test_data)
-    if status and status >= 400:
-        return vuln_list
+    content, status = await attempt_signup(url, test_data, browser)
     if content:
         lower_content = content.lower()
         created_account_keywords = ["account created", "successfully", "success"]
-        if lower_content and any(keyword in lower_content for keyword in created_account_keywords):
+        if (lower_content and any(keyword in lower_content for keyword in created_account_keywords)) or (status and status >= 400):
             return vuln_list
-        if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        if (lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status < 400):
             await add_entry_to_json(
                 "V2.1.3",
                 "Password Security",
@@ -273,7 +267,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url):
             vuln_list.append(["Password Security", "Password truncation is performed and accepted"])
     return vuln_list
 
-async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
+async def check_asvs_l1_password_security_V2_1_4(vuln_list, url, browser):
     """
     Vérifie si un mot de passe accepte des charactère unicode ainsi que des emojis
     """
@@ -288,7 +282,7 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
         "confirm_password": weird_password
     }
 
-    content, status = await attempt_signup(url, test_data)
+    content, status = await attempt_signup(url, test_data, browser)
     if status and status >= 400:
         return vuln_list
     if content:
@@ -296,7 +290,7 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
         already_existing_user_keywords = ["exists", "already", "taken"]
         if lower_content and any(keyword in lower_content for keyword in already_existing_user_keywords):
             return vuln_list
-        if lower_content and validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+        if (lower_content and validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status >= 400):
             await add_entry_to_json(
                 "V2.1.4",
                 "Password Security",
@@ -309,7 +303,7 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url):
 
 ## check_asvs_l1_password_security_V2_1_6 doit pouvoir vérifier que le changement de mot de passe demande l'ancien mot de passe
 
-async def check_asvs_l1_password_security_V2_1_7(vuln_list, url):
+async def check_asvs_l1_password_security_V2_1_7(vuln_list, url, browser):
     """
     Vérifie si le mot de passe accepte les mots de passe les plus utilisés
     """
@@ -325,12 +319,12 @@ async def check_asvs_l1_password_security_V2_1_7(vuln_list, url):
                 "password": weird_password,
                 "confirm_password": weird_password
             }
-            content, status = await attempt_signup(url, test_data)
+            content, status = await attempt_signup(url, test_data, browser)
             if status and status >= 400:
                 return vuln_list
             if content:
                 lower_content = content.lower()
-                if lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS):
+                if (lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status < 400):
                     await add_entry_to_json(
                         "V2.1.7",
                         "Password Security",
@@ -362,84 +356,86 @@ def check_login_button(content):
                 return True
     return False
 
-async def check_asvs_l1_password_security_V2_1_8(vuln_list, url):
+async def check_asvs_l1_password_security_V2_1_8(vuln_list, url, browser):
     """
     Vérifie si le mot de passe a une aide pour montrer sa force a l'utilisateur
     """
     if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
-    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
-            '--no-sandbox',  # necessary when running as root in Docker
-            '--disable-setuid-sandbox'
-        ])
     page = await browser.newPage()
-    await page.goto(url, {'timeout': 20000})
-    content = await page.content()
-    await browser.close()
-    if content:
-        lower_content = content.lower()
-        if check_login_button(content):
-            return vuln_list
-        meter_keywords = ["#strength-meter", ".password-strength", ".meter", "[data-strength]"]
-        if lower_content and not any(keyword in lower_content for keyword in meter_keywords):
-            await add_entry_to_json(
-                "V2.1.8",
-                "Password Security",
-                "There is no password strenght meter to help the user"
-            )
-            vuln_list.append(["Password Security", "There is no password strenght meter to help the user"])
-    return vuln_list
+    try:
+        await page.goto(url, {'timeout': 20000})
+        content = await page.content()
+        if content:
+            lower_content = content.lower()
+            if check_login_button(content):
+                return vuln_list
+            meter_keywords = ["#strength-meter", ".password-strength", ".meter", "[data-strength]"]
+            if lower_content and not any(keyword in lower_content for keyword in meter_keywords):
+                await add_entry_to_json(
+                    "V2.1.8",
+                    "Password Security",
+                    "There is no password strenght meter to help the user"
+                )
+                vuln_list.append(["Password Security", "There is no password strenght meter to help the user"])
+        return vuln_list
+    except Exception as e:
+        logger.error(f"Error in check V2.1.8: {e}")
+        return vuln_list
+    finally:
+        await page.close()
 
-async def check_asvs_l1_password_security_V2_1_11(vuln_list, url):
+async def check_asvs_l1_password_security_V2_1_11(vuln_list, url, browser):
     """
     Vérifie si le mot de passe accepte la fonction "coller" ainsi que les "password helpers" sont acceptés
     """
     if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
-    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
-            '--no-sandbox',  # necessary when running as root in Docker
-            '--disable-setuid-sandbox'
-        ])
     page = await browser.newPage()
-    await page.goto(url, {'timeout': 20000})
-    await page.focus('input[type="password"]')
-    passwd2111 = "Elev3nwr@ngG"
-    await page.evaluate(f'''
-        (passwd2111) => {{
-            const input = document.querySelector('input[type="password"]');
-            if (!input) {{
-                console.error("No password field found");
-                return;
+    try:
+        await page.goto(url, {'timeout': 20000})
+        await page.focus('input[type="password"]')
+        passwd2111 = "Elev3nwr@ngG"
+        await page.evaluate(f'''
+            (passwd2111) => {{
+                const input = document.querySelector('input[type="password"]');
+                if (!input) {{
+                    console.error("No password field found");
+                    return;
+                }}
+                const dataTransfer = new DataTransfer();
+                dataTransfer.setData('text/plain', passwd2111);
+                let pasteEvent;
+                try {{
+                    pasteEvent = new ClipboardEvent('paste', {{
+                        bubbles: true,
+                        cancelable: true,
+                        clipboardData: dataTransfer
+                    }});
+                }} catch(e) {{
+                    pasteEvent = new Event('paste', {{ bubbles: true, cancelable: true }});
+                    pasteEvent.clipboardData = dataTransfer;
+                }}
+                input.dispatchEvent(pasteEvent);
             }}
-            const dataTransfer = new DataTransfer();
-            dataTransfer.setData('text/plain', passwd2111);
-            let pasteEvent;
-            try {{
-                pasteEvent = new ClipboardEvent('paste', {{
-                    bubbles: true,
-                    cancelable: true,
-                    clipboardData: dataTransfer
-                }});
-            }} catch(e) {{
-                pasteEvent = new Event('paste', {{ bubbles: true, cancelable: true }});
-                pasteEvent.clipboardData = dataTransfer;
-            }}
-            input.dispatchEvent(pasteEvent);
-        }}
-    ''', passwd2111)
-    
-    pasted_value = await page.evaluate('document.querySelector("input[type=\'password\']").value')
-    await browser.close()
-    if pasted_value is not passwd2111:
-        await add_entry_to_json(
-            "V2.1.11",
-            "Password Security",
-            "The password cannot be pasted from the clipboard"
-        )
-        vuln_list.append(["Password Security", "The password cannot be pasted from the clipboard"])
-    return vuln_list
+        ''', passwd2111)
+        
+        pasted_value = await page.evaluate('document.querySelector("input[type=\'password\']").value')
+        if pasted_value is not passwd2111:
+            await add_entry_to_json(
+                "V2.1.11",
+                "Password Security",
+                "The password cannot be pasted from the clipboard"
+            )
+            vuln_list.append(["Password Security", "The password cannot be pasted from the clipboard"])
+        return vuln_list
+    except Exception as e:
+        logger.error(f"Error in check V2.1.11: {e}")
+        return vuln_list
+    finally:
+        await page.close()
 
 def can_see_password(content):
     """
@@ -462,28 +458,29 @@ def can_see_password(content):
             return True
     return False
 
-async def check_asvs_l1_password_security_V2_1_12(vuln_list, url):
+async def check_asvs_l1_password_security_V2_1_12(vuln_list, url, browser):
     """
     Vérifie si le mot de passe a une aide pour montrer sa force a l'utilisateur
     """
     if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
-    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
-            '--no-sandbox',  # necessary when running as root in Docker
-            '--disable-setuid-sandbox'
-        ])
     page = await browser.newPage()
-    await page.goto(url, {'timeout': 20000})
-    content = await page.content()
-    await browser.close()
-    if content:
-        lower_content = content.lower()
-        if lower_content and not can_see_password(content):
-            await add_entry_to_json(
-                "V2.1.12",
-                "Password Security",
-                "The password cannot be shown nor viewed"
-            )
-            vuln_list.append(["Password Security", "The password cannot be shown nor viewed"])
-    return vuln_list
+    try:
+        await page.goto(url, {'timeout': 20000})
+        content = await page.content()
+        if content:
+            lower_content = content.lower()
+            if lower_content and not can_see_password(content):
+                await add_entry_to_json(
+                    "V2.1.12",
+                    "Password Security",
+                    "The password cannot be shown nor viewed"
+                )
+                vuln_list.append(["Password Security", "The password cannot be shown nor viewed"])
+        return vuln_list
+    except Exception as e:
+        logger.error(f"Error in check V2.1.12: {e}")
+        return vuln_list
+    finally:
+        await page.close()

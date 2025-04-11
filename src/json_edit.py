@@ -85,3 +85,27 @@ async def clear_json():
     async with JSON_LOCK:
         if Path(JSONNAME).is_file():
             os.remove(JSONNAME)
+
+
+#############################################################################
+## Enlever les clones dans le JSON
+#############################################################################
+
+async def deduplicate_json():
+    async with JSON_LOCK:
+        if not Path(JSONNAME).is_file():
+            raise FileNotFoundError("JSON file not initialized. Call set_json(url) first.")
+        with open(JSONNAME, 'r') as file:
+            data = json.load(file)
+
+        if "data" in data and "findings" in data["data"]:
+            findings = data["data"]["findings"]
+            cleared_findings = {}
+            for finding in findings:
+                fid = finding.get("id")
+                if fid and fid not in cleared_findings:
+                    cleared_findings[fid] = finding
+            data["data"]["findings"] = list(cleared_findings.values())
+
+        with open(JSONNAME, 'w') as file:
+            json.dump(data, file, indent=4)
