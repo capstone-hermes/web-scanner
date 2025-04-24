@@ -234,7 +234,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
     if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
-    long_password = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx"
+    long_password = "@bcdefghijklmn0pqrstuvwxyzabcdefGhijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx"
     test_data = {
         "username": "3HERMEStest",
         "email": "3ASVSHermesTest@gmail.com",
@@ -245,7 +245,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
     if status and status >= 400:
         return vuln_list
 
-    long_password = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrst"
+    long_password = "@bcdefghijklmn0pqrstuvwxyzabcdefGhijklmnopqrstuvwxyzabcdefghijklmnopqrst"
     test_data = {
         "username": "3HERMEStest",
         "email": "3ASVSHermesTest@gmail.com",
@@ -274,7 +274,7 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url, browser):
     if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
-    weird_password = "☺☺☺🤖☻♥♦♣♠•◘○♦P4ssw@rd😁😎"
+    weird_password = "☺☺☺🤖☻♥♦♣♠•◘○♦😁😎"
     test_data = {
         "username": "4HERMEStest",
         "email": "4ASVSHermesTest@gmail.com",
@@ -398,32 +398,34 @@ async def check_asvs_l1_password_security_V2_1_11(vuln_list, url, browser):
         await page.goto(url, {'timeout': 20000})
         await page.focus('input[type="password"]')
         passwd2111 = "Elev3nwr@ngG"
-        await page.evaluate(f'''
-            (passwd2111) => {{
+        result = await page.evaluate(
+            """
+            (passwd2111) => {
                 const input = document.querySelector('input[type="password"]');
-                if (!input) {{
+                if (!input) {
                     console.error("No password field found");
                     return;
-                }}
+                }
                 const dataTransfer = new DataTransfer();
                 dataTransfer.setData('text/plain', passwd2111);
                 let pasteEvent;
-                try {{
-                    pasteEvent = new ClipboardEvent('paste', {{
+                try {
+                    pasteEvent = new ClipboardEvent('paste', {
+                        clipboardData: dataTransfer,
                         bubbles: true,
-                        cancelable: true,
-                        clipboardData: dataTransfer
-                    }});
-                }} catch(e) {{
-                    pasteEvent = new Event('paste', {{ bubbles: true, cancelable: true }});
+                        cancelable: true
+                    });
+                } catch(e) {
+                    pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
                     pasteEvent.clipboardData = dataTransfer;
-                }}
-                input.dispatchEvent(pasteEvent);
-            }}
-        ''', passwd2111)
-        
-        pasted_value = await page.evaluate('document.querySelector("input[type=\'password\']").value')
-        if pasted_value is not passwd2111:
+                }
+                const isPasteAllowed = input.dispatchEvent(pasteEvent);
+                if (isPasteAllowed) input.value = passwd2111;
+                return {isPasteAllowed, value: input.value};
+            }
+        """, passwd2111)
+
+        if (result['isPasteAllowed'] is False) or result['value'] is not passwd2111:
             await add_entry_to_json(
                 "V2.1.11",
                 "Password Security",
