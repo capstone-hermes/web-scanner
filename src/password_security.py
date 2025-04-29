@@ -245,12 +245,12 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
     if status and status >= 400:
         return vuln_list
 
-    long_password = "@bcdefghijklmn0pqrstuvwxyzabcdefGhijklmnopqrstuvwxyzabcdefghijklmnopqrst"
+    shorter_password = "@bcdefghijklmn0pqrstuvwxyzabcdefGhijklmnopqrstuvwxyzabcdefghijklmnopqrst"
     test_data = {
         "username": "3HERMEStest",
         "email": "3ASVSHermesTest@gmail.com",
-        "password": long_password,
-        "confirm_password": long_password
+        "password": shorter_password,
+        "confirm_password": shorter_password
     }
     content, status = await attempt_signup(url, test_data, browser)
     if content:
@@ -283,9 +283,9 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url, browser):
     }
 
     content, status = await attempt_signup(url, test_data, browser)
-    if status and status >= 400:
-        return vuln_list
     if content:
+        if (status and status < 400):
+            return vuln_list
         lower_content = content.lower()
         already_existing_user_keywords = ["exists", "already", "taken"]
         if lower_content and any(keyword in lower_content for keyword in already_existing_user_keywords):
@@ -358,7 +358,7 @@ def check_login_button(content):
 
 async def check_asvs_l1_password_security_V2_1_8(vuln_list, url, browser):
     """
-    Vérifie si le mot de passe a une aide pour montrer sa force a l'utilisateur
+    Vérifie si le mot de passe a une aide pour montrer a l'utilisateur a quel point celui-ci est sécurisé
     """
     if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
@@ -382,6 +382,46 @@ async def check_asvs_l1_password_security_V2_1_8(vuln_list, url, browser):
         return vuln_list
     except Exception as e:
         logger.error(f"Error in check V2.1.8: {e}")
+        return vuln_list
+    finally:
+        await page.close()
+
+async def check_asvs_l1_password_security_V2_1_9(vuln_list, url, browser):
+    """
+    Vérifie si la politique de mot de passe force un choix de charactères speciaux, chiffre, ou majuscule pour créer celui-ci
+    """
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
+        return vuln_list
+
+    page = await browser.newPage()
+    try:
+        await page.goto(url, {'timeout': 20000})
+        content = await page.content()
+        if content:
+            lower_content = content.lower()
+            if check_login_button(content):
+                return vuln_list
+            unsafe_password = "hellothisishermes"
+            test_data = {
+                "username": "9HERMEStest",
+                "email": "9ASVSHermesTest@gmail.com",
+                "password": unsafe_password,
+                "confirm_password": unsafe_password
+            }
+
+            content, status = await attempt_signup(url, test_data, browser)
+            if status and status < 400:
+                return vuln_list
+            if (lower_content and validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status >= 400):
+                await add_entry_to_json(
+                    "V2.1.9",
+                    "Password Security",
+                    "There should be no requirement for upper or lower case or numbers or special characters"
+                )
+                vuln_list.append(["Password Security", "There should be no requirement for upper or lower case or numbers or special characters"])
+        return vuln_list
+    except Exception as e:
+        logger.error(f"Error in check V2.1.9: {e}")
         return vuln_list
     finally:
         await page.close()
