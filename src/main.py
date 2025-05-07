@@ -9,4 +9,4 @@ if __name__ == "__main__":
         print("Usage: python main.py <url>")
         sys.exit(1)
     url = av[1]
-    asyncio.get_event_loop().run_until_complete(process_url(url))
+    asyncio.run(process_url(url))

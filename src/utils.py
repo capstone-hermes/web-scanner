@@ -4,7 +4,8 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from collections import deque
 from password_security import *
-from constants import *
+from links import *
+import constants as constants
 from json_edit import *
 import logging
 
@@ -25,7 +26,7 @@ async def fetch_async_pyppeteer(browser, url):
     """
     try:
         page = await browser.newPage()
-        response = await page.goto(url, {'timeout': 20000})
+        response = await page.goto(url, timeout=20_000, waitUntil="networkidle2")
         if response is None or response.status != 200:
             logger.error(f"Échec de la récupération asynchrone de la page {url}. Code: {response.status if response else 'Aucune réponse'}")
             await page.close()
@@ -37,47 +38,6 @@ async def fetch_async_pyppeteer(browser, url):
     except Exception as e:
         logger.error(f"Erreur lors de la récupération asynchrone de {url} : {e}")
         return None
-
-async def get_internal_links_async(start_url, max_pages=100, max_depth=3, batch_size=10):
-    """
-    Effectue un crawling asynchrone en utilisant pyppeteer pour récupérer les pages et en extraire les liens internes.
-    """
-    domain = urlparse(start_url).netloc
-    visited = set()
-    queue = deque([(start_url, 0)])
-
-    # replace to have visual demo
-    # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
-    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
-            '--no-sandbox',  # necessary when running as root in Docker
-            '--disable-setuid-sandbox'
-        ])
-    while queue and len(visited) < max_pages:
-        batch = []
-        while queue and len(batch) < batch_size:
-            url_item = queue.popleft()
-            if url_item[0] in visited or url_item[1] > max_depth:
-                continue
-            batch.append(url_item)
-        if not batch:
-            continue
-
-        tasks = [fetch_async_pyppeteer(browser, url) for url, _ in batch]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for idx, (url, depth) in enumerate(batch):
-            html = results[idx]
-            if html is None:
-                continue
-            visited.add(url)
-            soup = BeautifulSoup(html, "html.parser")
-            for link in soup.find_all("a", href=True):
-                new_url = urljoin(url, link["href"])
-                parsed_url = urlparse(new_url)
-                if parsed_url.netloc == domain and new_url not in visited:
-                    queue.append((new_url, depth + 1))
-    await browser.close()
-    return list(visited)
 
 async def process_forms(vuln_list, forms, url, browser):
     """
@@ -163,52 +123,59 @@ async def process_url(url):
     if not url.endswith("/"):
         url = url + "/"
 
+    # replace to have visual demo
+    # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
+    browser = await launch(headless=True, handleSIGINT=False, handleSIGTERM=False, handleSIGHUP=False, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
+            '--no-sandbox',  # necessary when running as root in Docker
+            '--disable-setuid-sandbox'
+        ])
     try:
-        links = await get_internal_links_async(url, max_pages=100, max_depth=3, batch_size=10)
+        links = await get_internal_links_async(url, browser, max_pages=100, max_depth=3, batch_size=10)
     except Exception as e:
         logger.error(f"Erreur lors du crawling asynchrone: {e}")
         return 1
 
+    
     if not links:
         logger.error("Aucun lien interne n'a pu être récupéré.")
         return 1
-
+    
     vuln_list = []
     await set_json(links[0])
+    
+    try:
+        for link in links:
+            html = await fetch_async_pyppeteer(browser, link)
+            if not html:
+                continue
+            await add_link_to_json(link)
+            soup = BeautifulSoup(html, 'html.parser')
+            constants.HAS_CAPTCHA = check_for_captcha(soup)
+            constants.HAS_INDENTIFICATION = check_for_identification(soup)
+            
+            for fct in function_list:
+                try:
+                    single = await asyncio.wait_for(fct(vuln_list, link, browser), timeout=15)
+                    if isinstance(single, Exception):
+                        logger.error("check %s error: %s", fct.__name__, single)
+                    else:
+                        for v in single:
+                            if v not in vuln_list:
+                                vuln_list.append(v)
+                except asyncio.TimeoutError:
+                    logger.warning("check %s on %s timed out", fct.__name__, link)
+                except Exception as e:
+                    logger.exception("check %s on %s failed", fct.__name__, link)
 
-    # replace to have visual demo
-    # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
-    browser = await launch(headless=True, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
-            '--no-sandbox',  # necessary when running as root in Docker
-            '--disable-setuid-sandbox'
-        ])
-    for link in links:
-        html = await fetch_async_pyppeteer(browser, link)
-        if not html:
-            continue
-        await add_link_to_json(link)
-        soup = BeautifulSoup(html, 'html.parser')
-        constants.HAS_CAPTCHA = check_for_captcha(soup)
-        constants.HAS_INDENTIFICATION = check_for_identification(soup)
-        
-        tasks = [function_check(vuln_list, link, browser) for function_check in function_list]
-        functions = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for function_result in functions:
-            if isinstance(function_result, Exception):
-                logger.error(f"Error in function check: {function_result}")
-            else:
-                for vuln in function_result:
-                    if vuln not in vuln_list:
-                        vuln_list.append(vuln)
-
-        # Process forms as before.
-        vuln_list = await process_forms(vuln_list, soup.find_all('form'), link, browser)
-    await browser.close()
-    await deduplicate_json()
-    vuln_list = await deduplicate_vuln_list(vuln_list)
-    logger.info(f"Vulnérabilités détectées : {vuln_list}")
-    return 0
+            # Process forms as before.
+            vuln_list = await process_forms(vuln_list, soup.find_all('form'), link, browser)
+    finally:
+        await browser.close()
+        await deduplicate_json()
+        vuln_list = await deduplicate_vuln_list(vuln_list)
+        logger.info(f"Vulnérabilités détectées : {vuln_list}")
+        return 0
 
 # Listes des fonctions de scan à exécuter
 
@@ -219,8 +186,10 @@ function_list = [
     check_asvs_l1_password_security_V2_1_2,
     check_asvs_l1_password_security_V2_1_3,
     check_asvs_l1_password_security_V2_1_4,
+    check_asvs_l1_password_security_V2_1_5,
 ##    check_asvs_l1_password_security_V2_1_7
     check_asvs_l1_password_security_V2_1_8,
-    check_asvs_l1_password_security_V2_1_11,
+    check_asvs_l1_password_security_V2_1_9,
+##    check_asvs_l1_password_security_V2_1_11,
     check_asvs_l1_password_security_V2_1_12
 ]

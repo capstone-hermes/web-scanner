@@ -7,6 +7,7 @@ import constants
 from json_edit import add_entry_to_json
 import logging
 from pyppeteer import launch
+from links import get_links_as_user
 
 # Configuration du logger
 logging.basicConfig(
@@ -39,7 +40,7 @@ async def detect_forms(url, browser):
     forms = []
     try:
         page = await browser.newPage()
-        await page.goto(url, {'timeout': 20000})
+        await page.goto(url, timeout=20_000, waitUntil="networkidle2")
         html = await page.content()
         soup = BeautifulSoup(html, "html.parser")
         for form in soup.find_all("form"):
@@ -91,7 +92,7 @@ async def attempt_signup(url, test_data, browser):
         # replace to have visual demo
         # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
         logger.info(f"Accès à {url}...")
-        response = await page.goto(url, {'timeout': 10000})
+        response = await page.goto(url, timeout=20_000, waitUntil="networkidle2")
 
         # Recherche des formulaires sur la page
         forms = await page.querySelectorAll("form")
@@ -102,7 +103,7 @@ async def attempt_signup(url, test_data, browser):
                 break
         if not login_form:
             logger.error("Aucun formulaire trouvé sur la page.")
-            return None, None
+            return None, None, None
 
         # Récupération et remplissage dynamique des champs du formulaire
         inputs = await login_form.querySelectorAll("input")
@@ -141,12 +142,12 @@ async def attempt_signup(url, test_data, browser):
         await asyncio.sleep(2)
         content = await page.content()
         status = response.status
-        return content, status
+        logger.info(f"Page returned status : {status}")
+        return content, status, page
     except Exception as e:
         logger.error(f"Erreur lors de l'inscription: {e}")
-        return None, None
-    finally:
-        await page.close()
+        return None, None, None
+        
 
 async def check_asvs_l1_password_security_V2_1_1(vuln_list, url, browser):
     """
@@ -162,7 +163,7 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url, browser):
         "confirm_password": "Elev3nwr@ng"
     }
 
-    content, status = await attempt_signup(url, test_data, browser)
+    content, status, page = await attempt_signup(url, test_data, browser)
     if status and status >= 400:
         return vuln_list
     if content:
@@ -174,6 +175,7 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url, browser):
                 "User password isn't required to be at least 12 characters in length"
             )
             vuln_list.append(["Password Security", "Password accepted with fewer than 12 characters"])
+    await page.close()
     return vuln_list
 
 async def check_asvs_l1_password_security_V2_1_2(vuln_list, url, browser):
@@ -191,7 +193,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url, browser):
         "confirm_password": long_password
     }
 
-    content, status = await attempt_signup(url, test_data, browser)
+    content, status, page = await attempt_signup(url, test_data, browser)
     if status and status >= 400:
         return vuln_list
     if content:
@@ -203,6 +205,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url, browser):
                 "User password is allowed with more than 128 characters"
             )
             vuln_list.append(["Password Security", "Password accepted with more than 128 characters"])
+            await page.close()
             return vuln_list
 
     long_password = "l8(szc?F*~x5[1u3><IOY6yq}N$Si*cG<ledceq5_è(lhtiER^$3Y9@D6le^!9bP"
@@ -213,7 +216,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url, browser):
         "confirm_password": long_password
     }
 
-    content, status = await attempt_signup(url, test_data, browser)
+    content, status, page = await attempt_signup(url, test_data, browser)
     if status and status >= 400:
         return vuln_list
     if content:
@@ -225,6 +228,7 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url, browser):
                 "User password isn't allowed with more than 64 characters"
             )
             vuln_list.append(["Password Security", "Password isn't accepted with more than 64 characters"])
+    await page.close()
     return vuln_list
 
 async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
@@ -241,7 +245,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
         "password": long_password,
         "confirm_password": long_password
     }
-    content, status = await attempt_signup(url, test_data, browser)
+    content, status, page = await attempt_signup(url, test_data, browser)
     if status and status >= 400:
         return vuln_list
 
@@ -252,7 +256,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
         "password": shorter_password,
         "confirm_password": shorter_password
     }
-    content, status = await attempt_signup(url, test_data, browser)
+    content, status, page = await attempt_signup(url, test_data, browser)
     if content:
         lower_content = content.lower()
         created_account_keywords = ["account created", "successfully", "success"]
@@ -265,6 +269,7 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
                 "User password truncation is performed and accepted"
             )
             vuln_list.append(["Password Security", "Password truncation is performed and accepted"])
+    await page.close()
     return vuln_list
 
 async def check_asvs_l1_password_security_V2_1_4(vuln_list, url, browser):
@@ -282,7 +287,7 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url, browser):
         "confirm_password": weird_password
     }
 
-    content, status = await attempt_signup(url, test_data, browser)
+    content, status, page = await attempt_signup(url, test_data, browser)
     if content:
         if (status and status < 400):
             return vuln_list
@@ -297,9 +302,45 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url, browser):
                 "User password doesn't accept unicode and emojis"
             )
             vuln_list.append(["Password Security", "Password doesn't accept unicode and emojis"])
+    await page.close()
     return vuln_list
 
 ## check_asvs_l1_password_security_V2_1_5 doit pouvoir vérifier si un utilisateur peut modifier son mot de passe
+
+async def check_asvs_l1_password_security_V2_1_5(vuln_list, url, browser):
+    """
+    Vérifie si un mot de passe est changeable une fois connecté
+    """
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
+        return vuln_list
+
+    password = "Elev3nwr@ngG0Rr1Ght"
+    test_data = {
+        "username": "5HERMEStest",
+        "email": "5ASVSHermesTest@gmail.com",
+        "password": password,
+        "confirm_password": password
+    }
+
+    content, status, page = await attempt_signup(url, test_data, browser)
+    links = await get_links_as_user(url, page)
+    for link in links:
+        print(link)
+    await page.close()
+    return vuln_list
+    if status and status >= 400:
+        return vuln_list
+    if content:
+        lower_content = content.lower()
+        if (lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status < 400):
+            await add_entry_to_json(
+                "V2.1.5",
+                "Password Security",
+                "User password can't be changed after login"
+            )
+            vuln_list.append(["Password Security", "User password can't be changed after login"])
+    await page.close()
+    return vuln_list
 
 ## check_asvs_l1_password_security_V2_1_6 doit pouvoir vérifier que le changement de mot de passe demande l'ancien mot de passe
 
@@ -319,7 +360,7 @@ async def check_asvs_l1_password_security_V2_1_7(vuln_list, url, browser):
                 "password": weird_password,
                 "confirm_password": weird_password
             }
-            content, status = await attempt_signup(url, test_data, browser)
+            content, status, page = await attempt_signup(url, test_data, browser)
             if status and status >= 400:
                 return vuln_list
             if content:
@@ -331,7 +372,9 @@ async def check_asvs_l1_password_security_V2_1_7(vuln_list, url, browser):
                         "User password accepts one of the 1000 most common passwords"
                     )
                     vuln_list.append(["Password Security", "Password accepts one of the 1000 most common passwords"])
+                    await page.close()
                     return vuln_list
+    await page.close()
     return vuln_list
 
 def check_login_button(content):
@@ -365,7 +408,7 @@ async def check_asvs_l1_password_security_V2_1_8(vuln_list, url, browser):
 
     page = await browser.newPage()
     try:
-        await page.goto(url, {'timeout': 20000})
+        await page.goto(url, timeout=20_000, waitUntil="networkidle2")
         content = await page.content()
         if content:
             lower_content = content.lower()
@@ -395,7 +438,7 @@ async def check_asvs_l1_password_security_V2_1_9(vuln_list, url, browser):
 
     page = await browser.newPage()
     try:
-        await page.goto(url, {'timeout': 20000})
+        await page.goto(url, timeout=20_000, waitUntil="networkidle2")
         content = await page.content()
         if content:
             lower_content = content.lower()
@@ -409,7 +452,7 @@ async def check_asvs_l1_password_security_V2_1_9(vuln_list, url, browser):
                 "confirm_password": unsafe_password
             }
 
-            content, status = await attempt_signup(url, test_data, browser)
+            content, status, page = await attempt_signup(url, test_data, browser)
             if status and status < 400:
                 return vuln_list
             if (lower_content and validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status >= 400):
@@ -435,7 +478,7 @@ async def check_asvs_l1_password_security_V2_1_11(vuln_list, url, browser):
 
     page = await browser.newPage()
     try:
-        await page.goto(url, {'timeout': 20000})
+        await page.goto(url, timeout=20_000, waitUntil="networkidle2")
         await page.focus('input[type="password"]')
         passwd2111 = "Elev3nwr@ngG"
         result = await page.evaluate(
@@ -509,7 +552,7 @@ async def check_asvs_l1_password_security_V2_1_12(vuln_list, url, browser):
 
     page = await browser.newPage()
     try:
-        await page.goto(url, {'timeout': 20000})
+        await page.goto(url, timeout=20_000, waitUntil="networkidle2")
         content = await page.content()
         if content:
             lower_content = content.lower()
