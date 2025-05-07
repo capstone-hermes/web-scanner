@@ -39,20 +39,6 @@ async def fetch_async_pyppeteer(browser, url):
         logger.error(f"Erreur lors de la récupération asynchrone de {url} : {e}")
         return None
 
-async def process_forms(vuln_list, forms, url, browser):
-    """
-    Parcours les formulaires d'une page et exécute pour chacun les vérifications fournies dans function_check_list.
-    (Les fonctions de scan doivent être adaptées pour être awaitables si elles réalisent des appels réseau.)
-    """
-    for form in forms:
-        inputs = form.find_all('input')
-        for input_field in inputs:
-            input_name = input_field.get('name', '')
-            input_type = input_field.get('type', 'text')
-            for function_check in function_check_list:
-                vuln_list = await function_check(vuln_list, url, input_name, input_type)
-    return vuln_list
-
 def check_for_captcha(HTML_soup):
     captcha_keywords = ["captcha", "g-recaptcha", "h-captcha", "grecaptcha", "verify you're human"]
 
@@ -166,10 +152,6 @@ async def process_url(url):
                     logger.warning("check %s on %s timed out", fct.__name__, link)
                 except Exception as e:
                     logger.exception("check %s on %s failed", fct.__name__, link)
-
-
-            # Process forms as before.
-            vuln_list = await process_forms(vuln_list, soup.find_all('form'), link, browser)
     finally:
         await browser.close()
         await deduplicate_json()
