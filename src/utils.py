@@ -181,9 +181,14 @@ function_list = [
     check_asvs_l1_input_validation_V5_1_2,
     check_asvs_l1_input_validation_V5_1_3,
     check_asvs_l1_input_validation_V5_1_5,
+    check_asvs_l1_file_upload_V12_1_1,
     check_asvs_l1_file_upload_V12_3_1,
     check_asvs_l1_file_upload_V12_3_2,
     check_asvs_l1_file_upload_V12_3_3,
     check_asvs_l1_file_upload_V12_3_4,
-    check_asvs_l1_file_upload_V12_3_5
+    check_asvs_l1_file_upload_V12_3_5,
+    check_asvs_l1_file_storage_V12_4_1,
+    check_asvs_l1_file_storage_V12_4_2,
+    check_asvs_l1_file_download_V12_5_1,
+    check_asvs_l1_file_download_V12_5_2,
 ]
