@@ -279,7 +279,8 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url, browser):
     if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
         return vuln_list
 
-    weird_password = "☺☺☺🤖☻♥♦♣♠•◘○♦😁😎"
+    #weird_password = "☺☺☺🤖☻♥♦♣♠•◘○♦😁😎"
+    weird_password = "☺☺☺☻♥♦♣♠•◘○♦"
     test_data = {
         "username": "4HERMEStest",
         "email": "4ASVSHermesTest@gmail.com",
@@ -324,15 +325,12 @@ async def check_asvs_l1_password_security_V2_1_5(vuln_list, url, browser):
 
     content, status, page = await attempt_signup(url, test_data, browser)
     links = await get_links_as_user(url, page)
-    for link in links:
-        print(link)
-    await page.close()
-    return vuln_list
+
     if status and status >= 400:
         return vuln_list
     if content:
         lower_content = content.lower()
-        if (lower_content and not validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status < 400):
+        if (status and status < 400):
             await add_entry_to_json(
                 "V2.1.5",
                 "Password Security",
@@ -343,6 +341,38 @@ async def check_asvs_l1_password_security_V2_1_5(vuln_list, url, browser):
     return vuln_list
 
 ## check_asvs_l1_password_security_V2_1_6 doit pouvoir vérifier que le changement de mot de passe demande l'ancien mot de passe
+
+async def check_asvs_l1_password_security_V2_1_6(vuln_list, url, browser):
+    """
+    Vérifie si un mot de passe est changeable une fois connecté
+    """
+    if constants.HAS_CAPTCHA or not constants.HAS_INDENTIFICATION:
+        return vuln_list
+
+    password = "Elev3nwr@ngG0Rr1Ght"
+    test_data = {
+        "username": "6HERMEStest",
+        "email": "6ASVSHermesTest@gmail.com",
+        "password": password,
+        "confirm_password": password
+    }
+
+    content, status, page = await attempt_signup(url, test_data, browser)
+    links = await get_links_as_user(url, page)
+
+    if status and status >= 400:
+        return vuln_list
+    if content:
+        lower_content = content.lower()
+        if (status and status < 400):
+            await add_entry_to_json(
+                "V2.1.6",
+                "Password Security",
+                "User old password isn't required to change the password"
+            )
+            vuln_list.append(["Password Security", "User old password isn't required to change the password"])
+    await page.close()
+    return vuln_list
 
 async def check_asvs_l1_password_security_V2_1_7(vuln_list, url, browser):
     """

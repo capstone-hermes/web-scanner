@@ -7,6 +7,8 @@ from password_security import *
 from links import *
 import constants as constants
 from json_edit import *
+from input_validation import *
+from file_upload import *
 import logging
 
 # Configuration du logger
@@ -169,9 +171,19 @@ function_list = [
     check_asvs_l1_password_security_V2_1_3,
     check_asvs_l1_password_security_V2_1_4,
     check_asvs_l1_password_security_V2_1_5,
+    check_asvs_l1_password_security_V2_1_6,
 ##    check_asvs_l1_password_security_V2_1_7
     check_asvs_l1_password_security_V2_1_8,
     check_asvs_l1_password_security_V2_1_9,
 ##    check_asvs_l1_password_security_V2_1_11,
-    check_asvs_l1_password_security_V2_1_12
+    check_asvs_l1_password_security_V2_1_12,
+    check_asvs_l1_input_validation_V5_1_1,
+    check_asvs_l1_input_validation_V5_1_2,
+    check_asvs_l1_input_validation_V5_1_3,
+    check_asvs_l1_input_validation_V5_1_5,
+    check_asvs_l1_file_upload_V12_3_1,
+    check_asvs_l1_file_upload_V12_3_2,
+    check_asvs_l1_file_upload_V12_3_3,
+    check_asvs_l1_file_upload_V12_3_4,
+    check_asvs_l1_file_upload_V12_3_5
 ]
