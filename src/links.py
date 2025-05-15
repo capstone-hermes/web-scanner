@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def get_internal_links_async(start_url, browser, max_pages=100, max_depth=3, batch_size=10):
+async def get_internal_links_async(start_url, browser, max_pages=100, max_depth=3, batch_size=5):
     """
     Effectue un crawling asynchrone en utilisant pyppeteer pour récupérer les pages et en extraire les liens internes.
     """

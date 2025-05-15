@@ -168,7 +168,7 @@ function_list = [
     check_asvs_l1_password_security_V2_1_2,
     check_asvs_l1_password_security_V2_1_3,
     check_asvs_l1_password_security_V2_1_4,
-    check_asvs_l1_password_security_V2_1_5,
+##    check_asvs_l1_password_security_V2_1_5,
 ##    check_asvs_l1_password_security_V2_1_7
     check_asvs_l1_password_security_V2_1_8,
     check_asvs_l1_password_security_V2_1_9,

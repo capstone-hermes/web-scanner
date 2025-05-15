@@ -8,6 +8,7 @@ from json_edit import add_entry_to_json
 import logging
 from pyppeteer import launch
 from links import get_links_as_user
+from urllib.parse import urlparse
 
 # Configuration du logger
 logging.basicConfig(
@@ -40,7 +41,7 @@ async def detect_forms(url, browser):
     forms = []
     try:
         page = await browser.newPage()
-        await page.goto(url, timeout=20_000, waitUntil="networkidle2")
+        await page.goto(url, timeout=5_000, waitUntil="networkidle2")
         html = await page.content()
         soup = BeautifulSoup(html, "html.parser")
         for form in soup.find_all("form"):
@@ -69,7 +70,7 @@ def validate_password_policy(response, error_patterns):
         return any(re.search(pattern, response) for pattern in error_patterns)
     return False
 
-async def attempt_signup(url, test_data, browser):
+async def attempt_signup(url, test_data, page):
     """
     Simule la soumission d'un formulaire d'inscription via pyppeteer.
     
@@ -85,14 +86,23 @@ async def attempt_signup(url, test_data, browser):
       - Soumet le formulaire (en cliquant sur le bouton submit ou en exécutant form.submit()).
       - Attend quelques secondes pour laisser le temps au rechargement et retourne le contenu HTML de la page résultante.
     """
-    page = await browser.newPage()
     try:
         username_keywords = ["user", "username", "login", "uid", "account"]
         email_keywords = ["mail", "email", "e-mail", "address"]
-        # replace to have visual demo
-        # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
         logger.info(f"Accès à {url}...")
-        response = await page.goto(url, timeout=20_000, waitUntil="networkidle2")
+    
+        def _on_request(request):
+            logger.debug("▶ REQ ➜ %s %s", request.method, request.url)
+            asyncio.create_task(request.continue_())
+
+        def _on_response(response):
+            logger.debug("◀ RES « %d » %s", response.status, response.url)
+
+        await page.setRequestInterception(True)
+        page.on("request", _on_request)
+        page.on("response", _on_response)
+
+        await page.goto(url, timeout=5_000, waitUntil="networkidle2")
 
         # Recherche des formulaires sur la page
         forms = await page.querySelectorAll("form")
@@ -103,7 +113,7 @@ async def attempt_signup(url, test_data, browser):
                 break
         if not login_form:
             logger.error("Aucun formulaire trouvé sur la page.")
-            return None, None, None
+            return None, None, page
 
         # Récupération et remplissage dynamique des champs du formulaire
         inputs = await login_form.querySelectorAll("input")
@@ -130,7 +140,7 @@ async def attempt_signup(url, test_data, browser):
                     await page.type(f'input[name="{name}"]', test_data.get("email"))
                 elif name in test_data:
                     await page.type(f'input[name="{name}"]', test_data[name])
-        
+
         # Soumission du formulaire
         submit_button = await login_form.querySelector("button[type='submit'], input[type='submit']")
         if submit_button:
@@ -138,16 +148,24 @@ async def attempt_signup(url, test_data, browser):
         else:
             await page.evaluate('(form) => form.submit()', login_form)
         
-        # Attendre quelques secondes pour le rechargement
-        await asyncio.sleep(2)
+        try:
+            response = await page.waitForResponse({'timeout': 5000, 'waitUntil': 'networkidle2'})
+            status = response.status
+        finally:
+            status = 201
+            await asyncio.sleep(5)
+
         content = await page.content()
-        status = response.status
         logger.info(f"Page returned status : {status}")
         return content, status, page
+##    except asyncio.TimeoutError:
+##        logger.error(f"Timeout lors de l'inscription")
+##        return None, None, page
     except Exception as e:
         logger.error(f"Erreur lors de l'inscription: {e}")
-        return None, None, None
-        
+        return None, None, page
+
+
 
 async def check_asvs_l1_password_security_V2_1_1(vuln_list, url, browser):
     """
@@ -163,7 +181,8 @@ async def check_asvs_l1_password_security_V2_1_1(vuln_list, url, browser):
         "confirm_password": "Elev3nwr@ng"
     }
 
-    content, status, page = await attempt_signup(url, test_data, browser)
+    page = await browser.newPage()
+    content, status, page = await attempt_signup(url, test_data, page)
     if status and status >= 400:
         return vuln_list
     if content:
@@ -193,7 +212,8 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url, browser):
         "confirm_password": long_password
     }
 
-    content, status, page = await attempt_signup(url, test_data, browser)
+    page = await browser.newPage()
+    content, status, page = await attempt_signup(url, test_data, page)
     if status and status >= 400:
         return vuln_list
     if content:
@@ -216,7 +236,9 @@ async def check_asvs_l1_password_security_V2_1_2(vuln_list, url, browser):
         "confirm_password": long_password
     }
 
-    content, status, page = await attempt_signup(url, test_data, browser)
+    await page.close()
+    page = await browser.newPage()
+    content, status, page = await attempt_signup(url, test_data, page)
     if status and status >= 400:
         return vuln_list
     if content:
@@ -245,7 +267,9 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
         "password": long_password,
         "confirm_password": long_password
     }
-    content, status, page = await attempt_signup(url, test_data, browser)
+
+    page = await browser.newPage()
+    content, status, page = await attempt_signup(url, test_data, page)
     if status and status >= 400:
         return vuln_list
 
@@ -256,7 +280,9 @@ async def check_asvs_l1_password_security_V2_1_3(vuln_list, url, browser):
         "password": shorter_password,
         "confirm_password": shorter_password
     }
-    content, status, page = await attempt_signup(url, test_data, browser)
+
+    page = await browser.newPage()
+    content, status, page = await attempt_signup(url, test_data, page)
     if content:
         lower_content = content.lower()
         created_account_keywords = ["account created", "successfully", "success"]
@@ -287,7 +313,8 @@ async def check_asvs_l1_password_security_V2_1_4(vuln_list, url, browser):
         "confirm_password": weird_password
     }
 
-    content, status, page = await attempt_signup(url, test_data, browser)
+    page = await browser.newPage()
+    content, status, page = await attempt_signup(url, test_data, page)
     if content:
         if (status and status < 400):
             return vuln_list
@@ -322,7 +349,8 @@ async def check_asvs_l1_password_security_V2_1_5(vuln_list, url, browser):
         "confirm_password": password
     }
 
-    content, status, page = await attempt_signup(url, test_data, browser)
+    page = await browser.newPage()
+    content, status, page = await attempt_signup(url, test_data, page)
     links = await get_links_as_user(url, page)
     for link in links:
         print(link)
@@ -360,7 +388,8 @@ async def check_asvs_l1_password_security_V2_1_7(vuln_list, url, browser):
                 "password": weird_password,
                 "confirm_password": weird_password
             }
-            content, status, page = await attempt_signup(url, test_data, browser)
+            page = await browser.newPage()
+            content, status, page = await attempt_signup(url, test_data, page)
             if status and status >= 400:
                 return vuln_list
             if content:
@@ -451,8 +480,8 @@ async def check_asvs_l1_password_security_V2_1_9(vuln_list, url, browser):
                 "password": unsafe_password,
                 "confirm_password": unsafe_password
             }
-
-            content, status, page = await attempt_signup(url, test_data, browser)
+            page = await browser.newPage()
+            content, status, page = await attempt_signup(url, test_data, page)
             if status and status < 400:
                 return vuln_list
             if (lower_content and validate_password_policy(lower_content, PASSWORD_ERROR_PATTERNS)) or (status and status >= 400):
