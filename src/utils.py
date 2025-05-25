@@ -111,6 +111,7 @@ async def process_url(url):
     if not url.endswith("/"):
         url = url + "/"
 
+    constants.BASE_URL = url
     # replace to have visual demo
     # browser = await launch(headless=False, slowMo=10, executablePath=constants.BROWSER_EXECUTABLE_PATH)
     browser = await launch(headless=True, handleSIGINT=False, handleSIGTERM=False, handleSIGHUP=False, executablePath=constants.BROWSER_EXECUTABLE_PATH, args=[
